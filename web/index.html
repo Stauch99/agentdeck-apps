@@ -1,12 +1,96 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpenMusic</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenMusic</title>
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <h1>OpenMusic</h1>
-  <p>Scaffold placeholder — UI shell arrives in Task 7.</p>
+<div class="om-app">
+  <!-- LEFT: creation console -->
+  <aside class="om-left">
+    <div class="om-modes">
+      <button data-mode="simple" class="om-seg">Simple</button>
+      <button data-mode="advanced" class="om-seg on">Advanced</button>
+      <select id="om-model" class="om-model">
+        <option value="V4_5ALL" selected>v4.5-all</option>
+        <option value="V5_5">v5.5</option>
+        <option value="V4_5PLUS">v4.5-plus</option>
+        <option value="V4_5">v4.5</option>
+        <option value="V4">v4</option>
+        <option value="V3_5">v3.5</option>
+      </select>
+    </div>
+
+    <section class="om-group">
+      <header class="om-group-h"><span>Lyrics</span>
+        <div class="om-lyric-modes">
+          <button data-lyric="write" class="om-chip on">Write</button>
+          <button data-lyric="prompt" class="om-chip">Prompt</button>
+          <button data-lyric="instrumental" class="om-chip">Instrumental</button>
+        </div>
+      </header>
+      <textarea id="om-prompt" class="om-text" rows="6" placeholder="Write your lyrics, or describe the song…"></textarea>
+    </section>
+
+    <section class="om-group">
+      <header class="om-group-h"><span>Styles</span></header>
+      <textarea id="om-style" class="om-text" rows="3" placeholder="e.g. melody-first R&B, warm Rhodes, 78 BPM trap-soul"></textarea>
+      <input id="om-negative" class="om-input" placeholder="Exclude styles (optional)" />
+    </section>
+
+    <section class="om-group om-more">
+      <header class="om-group-h"><span>More Options</span></header>
+      <div class="om-row">
+        <label>Vocal Gender</label>
+        <div class="om-seg-mini">
+          <button data-vocal="" class="on">Auto</button>
+          <button data-vocal="m">Male</button>
+          <button data-vocal="f">Female</button>
+        </div>
+      </div>
+      <div class="om-row om-slider-row">
+        <label>Weirdness <b id="om-weird-v">50%</b></label>
+        <input id="om-weird" type="range" min="0" max="100" value="50" class="om-slider" />
+      </div>
+      <div class="om-row om-slider-row">
+        <label>Style Influence <b id="om-style-v">50%</b></label>
+        <input id="om-styleinf" type="range" min="0" max="100" value="50" class="om-slider" />
+      </div>
+    </section>
+
+    <input id="om-title" class="om-input" placeholder="Song Title (optional)" />
+    <button id="om-create" class="om-create">Create</button>
+  </aside>
+
+  <!-- MAIN: workspace song list -->
+  <main class="om-main">
+    <header class="om-main-h"><h1>My Workspace</h1></header>
+    <div id="om-list" class="om-list"></div>
+    <div id="om-empty" class="om-empty">No songs yet — describe one and hit Create.</div>
+  </main>
+</div>
+
+<!-- BOTTOM: player -->
+<footer class="om-player" id="om-player" hidden>
+  <div class="om-now">
+    <img id="om-now-cover" class="om-now-cover" alt="" />
+    <div class="om-now-meta"><b id="om-now-title">—</b><span id="om-now-style"></span></div>
+  </div>
+  <div class="om-controls">
+    <button id="om-prev" class="om-pbtn">⏮</button>
+    <button id="om-play" class="om-pbtn om-play">▶</button>
+    <button id="om-next" class="om-pbtn">⏭</button>
+  </div>
+  <div class="om-seek">
+    <span id="om-cur">0:00</span>
+    <input id="om-bar" type="range" min="0" max="100" value="0" class="om-slider" />
+    <span id="om-dur">0:00</span>
+  </div>
+  <audio id="om-audio"></audio>
+</footer>
+
+<script src="app.js"></script>
 </body>
 </html>
