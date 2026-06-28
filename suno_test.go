@@ -14,10 +14,6 @@ import (
 	"time"
 )
 
-// srvURL is captured by the Service end-to-end test so the kie stub can point
-// generated media URLs back at its own httptest.Server (closure-friendly).
-var srvURL string
-
 func TestGenerateParsesTaskID(t *testing.T) {
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +100,7 @@ func TestValidateCustomModeRequiresFields(t *testing.T) {
 
 func TestServiceSubmitPollsAndCachesMedia(t *testing.T) {
 	calls := 0
+	var base string // kie stub points generated media URLs back at its own server; set after it starts
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/api/v1/generate") && r.Method == http.MethodPost:
@@ -118,19 +115,20 @@ func TestServiceSubmitPollsAndCachesMedia(t *testing.T) {
 			fmt.Fprintf(w, `{"code":200,"msg":"ok","data":{"status":"SUCCESS","response":{"sunoData":[
 				{"id":"a0","audioUrl":"%s/m/a0.mp3","imageUrl":"%s/m/a0.jpg","title":"One","tags":"pop","duration":120},
 				{"id":"a1","audioUrl":"%s/m/a1.mp3","imageUrl":"%s/m/a1.jpg","title":"Two","tags":"pop","duration":121}
-			]}}}`, srvURL, srvURL, srvURL, srvURL)
+			]}}}`, base, base, base, base)
 		case strings.HasPrefix(r.URL.Path, "/m/"):
 			w.Write([]byte("BINARY:" + r.URL.Path))
 		}
 	}))
 	defer srv.Close()
-	srvURL = srv.URL // capture for media URLs (closure-friendly package var, see below)
+	base = srv.URL // media URLs point back at this server (loopback)
 
 	dir := t.TempDir()
 	lib, _ := NewLibrary(dir)
 	svc := NewService(NewClient(srv.URL, "k"), lib)
 	svc.interval = 5 * time.Millisecond // fast polling for the test
 	svc.timeout = 2 * time.Second
+	svc.blockPrivateHosts = false // media downloads come from the loopback httptest server
 
 	taskID, err := svc.Submit(context.Background(), GenerateRequest{CustomMode: false, Model: "V4", Prompt: "hi"})
 	if err != nil || taskID != "T9" {

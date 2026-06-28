@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -43,5 +44,5 @@ func main() {
 		w.Header().Set("Content-Type", "image/jpeg")
 		w.Write([]byte{0xFF, 0xD8, 0xFF, 0xD9})
 	})
-	http.ListenAndServe(":8077", h)
+	log.Fatal(http.ListenAndServe(":8077", h))
 }

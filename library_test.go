@@ -58,11 +58,18 @@ func TestLibraryLifecycle(t *testing.T) {
 		t.Fatalf("persistence wrong: %+v", s[0])
 	}
 
-	// MarkError marks all songs of a task.
+	// MarkError flips only still-generating songs; the already-done track (aud0) is preserved.
 	lib2.MarkError("task1", "sensitive words")
 	for _, sg := range lib2.List() {
-		if sg.TaskID == "task1" && sg.Status != "error" {
-			t.Fatalf("MarkError missed %s", sg.ID)
+		switch sg.ID {
+		case "aud0":
+			if sg.Status != "done" {
+				t.Fatalf("MarkError clobbered the done song: %+v", sg)
+			}
+		case "task1#1":
+			if sg.Status != "error" || sg.ErrorMessage != "sensitive words" {
+				t.Fatalf("MarkError did not flip the generating song: %+v", sg)
+			}
 		}
 	}
 

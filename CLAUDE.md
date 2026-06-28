@@ -4,10 +4,10 @@
 AI 音乐生成应用,AgentDeck 卡带。纯 stdlib-Go 后端代理 kie.ai SunoAPI,embed 前端,曲库落卷。
 
 成员清单
-main.go: 装配入口,读 env(KIE_API_KEY/KIE_BASE_URL/OPENMUSIC_DATA_DIR/OPENMUSIC_ADDR),embed web/,ListenAndServe
-suno.go: kie.ai 客户端 + Service。Generate/RecordInfo(Bearer);Submit→占位+后台 poll(10s/10min)→Materialize→cacheMedia
-library.go: Song/Library。library.json 索引 + media/<id>.{mp3,jpg} 落卷;线程安全;占位→物化→done/error
-server.go: HTTP 面。/api/generate /api/songs /api/songs/{id}(DELETE) /media/{file} + embed 静态
+main.go: 装配入口,读 env(KIE_API_KEY/KIE_BASE_URL/OPENMUSIC_DATA_DIR/OPENMUSIC_ADDR/OPENMUSIC_ALLOW_PRIVATE_MEDIA),embed web/,signal.NotifyContext 优雅关停,ListenAndServe
+suno.go: kie.ai 客户端 + Service。Generate/RecordInfo(Bearer);Submit→占位+后台 poll(ctx 可取消,10s/10min,slot 按 trackID 去重抗乱序)→Materialize→cacheMedia(fetch:http/https + LimitReader + SSRF 拦私网)
+library.go: Song/Library。library.json 索引 + media/<id>.{mp3,jpg} 落卷;线程安全;占位→物化→done/error(MarkError 仅翻 generating,不动 done)
+server.go: HTTP 面。/api/generate(MaxBytesReader)/api/songs /api/songs/{id}(DELETE)/media/{file} + embed 静态 + 安全头中间件(nosniff/CSP,不设 frame-ancestors)
 web/: 前端。index.html(三区) styles.css(oklch 暗色) app.js(表单/轮询/播放器);全相对路径(过反代)
 Dockerfile: 多阶段 → FROM scratch + ca-certs;镜像 agentdeck/openmusic:latest,容器端口 8080
 devtools/fake-kie/: 仅本地 UI 验证用的假 kie server,不进镜像(.dockerignore 排除)

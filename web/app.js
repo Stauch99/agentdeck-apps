@@ -5,6 +5,8 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
   const fmtTime = (s) => { s = Math.max(0, s | 0); return `${(s / 60) | 0}:${String(s % 60).padStart(2, "0")}`; };
+  // Build a media URL safely: id is percent-encoded for the URL path (defense-in-depth vs odd ids).
+  const mediaURL = (id, ext) => "media/" + encodeURIComponent(id) + "." + ext;
 
   const state = { mode: "advanced", lyric: "write", vocal: "", playing: null, songs: [] };
 
@@ -31,8 +33,10 @@
   $("om-create").onclick = async () => {
     const advanced = state.mode === "advanced";
     const instrumental = state.lyric === "instrumental";
+    // Instrumental always uses custom mode (kie requires style+title for instrumental, never a lyrics prompt).
+    const customMode = advanced || instrumental;
     const body = {
-      customMode: advanced,
+      customMode,
       model: $("om-model").value,
       instrumental,
       prompt: instrumental ? "" : $("om-prompt").value.trim(),
@@ -71,21 +75,29 @@
   function renderList() {
     const el = $("om-list");
     el.innerHTML = state.songs.map((s) => {
-      const cover = s.hasCover ? `media/${esc(s.id)}.jpg` : "";
+      const cover = s.hasCover ? mediaURL(s.id, "jpg") : "";
       const badge = s.status === "generating" ? "生成中…" : s.status === "error" ? "失败" : (s.model || "");
       const sub = s.status === "error" ? esc(s.errorMessage || "generation failed") : esc(s.style || s.tags || "");
-      const play = s.status === "done" && s.hasAudio
-        ? `<button class="om-card-play" data-play="${esc(s.id)}">▶</button>` : "";
+      const actions =
+        (s.status === "done" && s.hasAudio ? `<button class="om-card-play" data-play="${esc(s.id)}">▶</button>` : "") +
+        (s.status !== "generating" ? `<button class="om-card-del" data-del="${esc(s.id)}" title="删除">✕</button>` : "");
       return `<div class="om-card ${esc(s.status)}">
-        <div class="om-cover">${cover ? `<img class="om-cover" src="${cover}" alt="">` : "♪"}</div>
+        <div class="om-cover">${cover ? `<img src="${esc(cover)}" alt="">` : "♪"}</div>
         <div class="om-card-body">
           <div class="om-card-title">${esc(s.title || "Untitled")}</div>
           <div class="om-card-sub">${sub}</div>
         </div>
-        <span class="om-card-badge">${esc(badge)}</span>${play}
+        <span class="om-card-badge">${esc(badge)}</span>${actions}
       </div>`;
     }).join("");
     el.querySelectorAll("[data-play]").forEach((b) => b.onclick = () => play(b.dataset.play));
+    el.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => del(b.dataset.del));
+  }
+
+  async function del(id) {
+    try { await fetch("api/songs/" + encodeURIComponent(id), { method: "DELETE" }); } catch (_) { /* best-effort */ }
+    if (state.playing === id) { audio.pause(); state.playing = null; $("om-player").hidden = true; }
+    refresh();
   }
 
   // ---- player ----
@@ -94,12 +106,12 @@
     const s = state.songs.find((x) => x.id === id);
     if (!s) return;
     state.playing = id;
-    audio.src = `media/${id}.mp3`;
+    audio.src = mediaURL(id, "mp3");
     audio.play();
     $("om-player").hidden = false;
     $("om-now-title").textContent = s.title || "Untitled";
     $("om-now-style").textContent = s.style || s.tags || "";
-    $("om-now-cover").src = s.hasCover ? `media/${id}.jpg` : "";
+    $("om-now-cover").src = s.hasCover ? mediaURL(id, "jpg") : "";
     $("om-play").textContent = "⏸";
   }
   $("om-play").onclick = () => { if (audio.paused) { audio.play(); $("om-play").textContent = "⏸"; } else { audio.pause(); $("om-play").textContent = "▶"; } };

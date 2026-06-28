@@ -9,6 +9,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -131,7 +132,8 @@ func (l *Library) MarkError(taskID, msg string) error {
 	defer l.mu.Unlock()
 	found := false
 	for i := range l.songs {
-		if l.songs[i].TaskID == taskID {
+		// Only flip songs that are still generating — never clobber an already-done track.
+		if l.songs[i].TaskID == taskID && l.songs[i].Status == "generating" {
 			l.songs[i].Status = "error"
 			l.songs[i].ErrorMessage = msg
 			found = true
@@ -173,7 +175,9 @@ func (l *Library) save() {
 	b, _ := json.MarshalIndent(struct {
 		Songs []Song `json:"songs"`
 	}{l.songs}, "", "  ")
-	os.WriteFile(l.path, b, 0o600)
+	if err := os.WriteFile(l.path, b, 0o600); err != nil {
+		log.Printf("library: save %s failed: %v", l.path, err)
+	}
 }
 
 // markErrorByID flips a single song to error by its id. (introduced in Task 4; suno.go calls it)

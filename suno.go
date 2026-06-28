@@ -1,5 +1,5 @@
 /**
- * [INPUT]: Depends on net/http, encoding/json, context, io, net/url, strings, time from stdlib; Library from this module
+ * [INPUT]: Depends on net/http, net, encoding/json, context, io, net/url, strings, time from stdlib; Library from this module
  * [OUTPUT]: Provides Track, GenerateRequest, Client, Service for kie.ai SunoAPI
  * [POS]: kie.ai-facing layer of openmusic; consumed by Server, writes via Library
  * [PROTOCOL]: When changing, update this header, then check openmusic/CLAUDE.md
@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -146,7 +147,9 @@ func (c *Client) Generate(ctx context.Context, r GenerateRequest) (string, error
 	var d struct {
 		TaskID string `json:"taskId"`
 	}
-	json.Unmarshal(env.Data, &d)
+	if err := json.Unmarshal(env.Data, &d); err != nil {
+		return "", fmt.Errorf("parse kie generate data: %w", err)
+	}
 	if d.TaskID == "" {
 		return "", fmt.Errorf("kie returned empty taskId")
 	}
@@ -166,29 +169,39 @@ func (c *Client) RecordInfo(ctx context.Context, taskID string) (string, []Track
 			SunoData []Track `json:"sunoData"`
 		} `json:"response"`
 	}
-	json.Unmarshal(env.Data, &d)
+	if err := json.Unmarshal(env.Data, &d); err != nil {
+		return "", nil, "", fmt.Errorf("parse kie record-info data: %w", err)
+	}
 	return d.Status, d.Response.SunoData, d.ErrorMessage, nil
 }
 
 // Service ties the kie client to the library: submit + background poll + media cache.
 type Service struct {
-	client   *Client
-	lib      *Library
-	http     *http.Client
-	interval time.Duration
-	timeout  time.Duration
+	client            *Client
+	lib               *Library
+	http              *http.Client
+	interval          time.Duration
+	timeout           time.Duration
+	baseCtx           context.Context // process-lifetime context; cancelled on shutdown to stop poll loops
+	blockPrivateHosts bool            // SSRF guard: refuse media downloads from loopback/private hosts
+	maxFetchBytes     int64           // cap per media download (anti memory-exhaustion)
 }
 
 func NewService(c *Client, lib *Library) *Service {
 	return &Service{
-		client: c, lib: lib,
-		http:     &http.Client{Timeout: 60 * time.Second},
-		interval: 10 * time.Second,
-		timeout:  10 * time.Minute,
+		client:            c,
+		lib:               lib,
+		http:              &http.Client{Timeout: 60 * time.Second},
+		interval:          10 * time.Second,
+		timeout:           10 * time.Minute,
+		baseCtx:           context.Background(),
+		blockPrivateHosts: true,
+		maxFetchBytes:     64 << 20, // 64 MiB
 	}
 }
 
 // Submit validates, calls kie generate, seeds two placeholders, and spawns the poll loop.
+// The poll runs under baseCtx (process lifetime), NOT the request ctx, so it survives the HTTP response.
 func (s *Service) Submit(ctx context.Context, r GenerateRequest) (string, error) {
 	if err := r.Validate(); err != nil {
 		return "", err
@@ -198,21 +211,31 @@ func (s *Service) Submit(ctx context.Context, r GenerateRequest) (string, error)
 		return "", err
 	}
 	s.lib.AddPlaceholders(taskID, r.Model, r.Style, r.Title, 2)
-	go s.poll(taskID)
+	go s.poll(s.baseCtx, taskID)
 	return taskID, nil
 }
 
-func (s *Service) poll(taskID string) {
-	done := map[int]bool{}
+// poll drives one task to completion: 10s ticks until SUCCESS/failure/timeout, or until ctx is cancelled
+// (graceful shutdown). Tracks are deduplicated by track ID and assigned stable placeholder slots in arrival
+// order, so a reorder between FIRST_SUCCESS and SUCCESS never skips or double-writes a candidate.
+func (s *Service) poll(ctx context.Context, taskID string) {
+	slot := map[string]int{} // trackID -> placeholder index (stable, arrival order)
+	next := 0
 	deadline := time.Now().Add(s.timeout)
+	ticker := time.NewTicker(s.interval)
+	defer ticker.Stop()
 	for {
-		time.Sleep(s.interval)
+		select {
+		case <-ctx.Done():
+			return // process shutting down
+		case <-ticker.C:
+		}
 		if time.Now().After(deadline) {
 			s.lib.MarkError(taskID, "generation timed out")
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		status, tracks, errMsg, err := s.client.RecordInfo(ctx, taskID)
+		rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		status, tracks, errMsg, err := s.client.RecordInfo(rctx, taskID)
 		cancel()
 		if err != nil {
 			continue // transient; retry next tick
@@ -221,15 +244,20 @@ func (s *Service) poll(taskID string) {
 		case "PENDING", "TEXT_SUCCESS":
 			// keep waiting
 		case "FIRST_SUCCESS", "SUCCESS":
-			for i, tr := range tracks {
-				if done[i] {
-					continue
+			for _, tr := range tracks {
+				if _, seen := slot[tr.ID]; seen {
+					continue // already handled this track in an earlier poll
 				}
-				if _, err := s.lib.Materialize(taskID, i, tr); err != nil {
+				if next >= 2 {
+					continue // only two candidate slots exist per task
+				}
+				idx := next
+				next++
+				slot[tr.ID] = idx
+				if _, err := s.lib.Materialize(taskID, idx, tr); err != nil {
 					continue
 				}
 				s.cacheMedia(tr)
-				done[i] = true
 			}
 			if status == "SUCCESS" {
 				return
@@ -269,7 +297,19 @@ func (s *Service) cacheMedia(t Track) {
 	s.lib.markErrorByID(t.ID, "audio download failed")
 }
 
+// fetch downloads a media URL with SSRF + size guards: only http/https, optionally refuse private/loopback
+// hosts, and cap the body at maxFetchBytes.
 func (s *Service) fetch(rawURL string) ([]byte, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse media url: %w", err)
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return nil, fmt.Errorf("refuse media url scheme %q", u.Scheme)
+	}
+	if s.blockPrivateHosts && isPrivateHost(u.Hostname()) {
+		return nil, fmt.Errorf("refuse private/loopback media host %q", u.Hostname())
+	}
 	resp, err := s.http.Get(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", rawURL, err)
@@ -278,5 +318,23 @@ func (s *Service) fetch(rawURL string) ([]byte, error) {
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("download %s: http %d", rawURL, resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	return io.ReadAll(io.LimitReader(resp.Body, s.maxFetchBytes))
+}
+
+// isPrivateHost reports whether host resolves to a loopback/private/link-local address (SSRF guard).
+// Unresolvable or empty hosts are treated as unsafe.
+func isPrivateHost(host string) bool {
+	if host == "" {
+		return true
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return true
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return true
+		}
+	}
+	return false
 }

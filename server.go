@@ -1,5 +1,5 @@
 /**
- * [INPUT]: Depends on encoding/json, net/http, io/fs, path, strings from stdlib; Service+Library from this module
+ * [INPUT]: Depends on context, encoding/json, net/http, io/fs, path, strings, time from stdlib; Service+Library from this module
  * [OUTPUT]: Provides Server, NewServer, (*Server).Handler — the openmusic REST + static surface
  * [POS]: HTTP boundary of openmusic; consumed by main.go, drives Service and reads Library
  * [PROTOCOL]: When changing, update this header, then check openmusic/CLAUDE.md
@@ -15,6 +15,9 @@ import (
 	"strings"
 	"time"
 )
+
+// maxGenerateBody caps the /api/generate request body (anti memory-exhaustion); any valid payload is < a few KB.
+const maxGenerateBody = 64 * 1024
 
 type Server struct {
 	svc *Service
@@ -40,7 +43,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/songs/", s.handleSongDelete)
 	mux.HandleFunc("/media/", s.handleMedia)
 	mux.Handle("/", http.FileServer(http.FS(s.web)))
-	return mux
+	return securityHeaders(mux)
+}
+
+// securityHeaders sets defensive response headers on every response. It deliberately omits
+// X-Frame-Options / CSP frame-ancestors so AgentDeck can embed OpenMusic in its fullscreen iframe
+// (AgentDeck's reverse proxy is the trust boundary; see docs/agentdeck/ADDING-AN-APP.md §4).
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Content-Security-Policy",
+			"default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +65,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxGenerateBody)
 	var req GenerateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad json"})
