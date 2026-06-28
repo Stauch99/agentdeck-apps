@@ -25,6 +25,7 @@ type Song struct {
 	Title        string  `json:"title"`
 	Style        string  `json:"style"`
 	Tags         string  `json:"tags"`
+	Lyrics       string  `json:"lyrics,omitempty"` // from kie track.prompt; "[Instrumental]" for instrumental
 	Model        string  `json:"model"`
 	Duration     float64 `json:"duration"`
 	Status       string  `json:"status"` // generating | done | error
@@ -94,6 +95,7 @@ func (l *Library) Materialize(taskID string, idx int, t Track) (Song, error) {
 				l.songs[i].Title = t.Title
 			}
 			l.songs[i].Tags = t.Tags
+			l.songs[i].Lyrics = t.Prompt
 			if t.Duration > 0 {
 				l.songs[i].Duration = t.Duration
 			}

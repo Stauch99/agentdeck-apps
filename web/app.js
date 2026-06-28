@@ -1,11 +1,10 @@
-// OpenMusic frontend — form state, generate, polling refresh, audio player.
+// OpenMusic frontend — form state, generate, polling refresh, persistent audio player, lyrics modal.
 // All API calls are relative so the app works behind AgentDeck's /agent/openmusic/ proxy.
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
   const fmtTime = (s) => { s = Math.max(0, s | 0); return `${(s / 60) | 0}:${String(s % 60).padStart(2, "0")}`; };
-  // Build a media URL safely: id is percent-encoded for the URL path (defense-in-depth vs odd ids).
   const mediaURL = (id, ext) => "media/" + encodeURIComponent(id) + "." + ext;
 
   const state = { mode: "advanced", lyric: "write", vocal: "", playing: null, songs: [] };
@@ -33,8 +32,7 @@
   $("om-create").onclick = async () => {
     const advanced = state.mode === "advanced";
     const instrumental = state.lyric === "instrumental";
-    // Instrumental always uses custom mode (kie requires style+title for instrumental, never a lyrics prompt).
-    const customMode = advanced || instrumental;
+    const customMode = advanced || instrumental; // instrumental always custom (kie needs style+title, no lyrics prompt)
     const body = {
       customMode,
       model: $("om-model").value,
@@ -62,6 +60,7 @@
       const data = await (await fetch("api/songs")).json();
       state.songs = data.songs || [];
       renderList();
+      if (!state.playing) setIdle();
       return state.songs.some((s) => s.status === "generating");
     } catch { return false; }
   }
@@ -78,45 +77,79 @@
       const cover = s.hasCover ? mediaURL(s.id, "jpg") : "";
       const badge = s.status === "generating" ? "生成中…" : s.status === "error" ? "失败" : (s.model || "");
       const sub = s.status === "error" ? esc(s.errorMessage || "generation failed") : esc(s.style || s.tags || "");
+      const playing = state.playing === s.id ? " playing" : "";
       const actions =
         (s.status === "done" && s.hasAudio ? `<button class="om-card-play" data-play="${esc(s.id)}">▶</button>` : "") +
         (s.status !== "generating" ? `<button class="om-card-del" data-del="${esc(s.id)}" title="删除">✕</button>` : "");
-      return `<div class="om-card ${esc(s.status)}">
+      return `<div class="om-card ${esc(s.status)}${playing}">
         <div class="om-cover">${cover ? `<img src="${esc(cover)}" alt="">` : "♪"}</div>
-        <div class="om-card-body">
+        <div class="om-card-body" data-lyrics="${esc(s.id)}" title="查看歌词">
           <div class="om-card-title">${esc(s.title || "Untitled")}</div>
           <div class="om-card-sub">${sub}</div>
         </div>
         <span class="om-card-badge">${esc(badge)}</span>${actions}
       </div>`;
     }).join("");
-    el.querySelectorAll("[data-play]").forEach((b) => b.onclick = () => play(b.dataset.play));
-    el.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => del(b.dataset.del));
+    el.querySelectorAll("[data-play]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); play(b.dataset.play); });
+    el.querySelectorAll("[data-del]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); del(b.dataset.del); });
+    el.querySelectorAll("[data-lyrics]").forEach((b) => b.onclick = () => showLyrics(b.dataset.lyrics));
   }
 
   async function del(id) {
     try { await fetch("api/songs/" + encodeURIComponent(id), { method: "DELETE" }); } catch (_) { /* best-effort */ }
-    if (state.playing === id) { audio.pause(); state.playing = null; $("om-player").hidden = true; }
+    if (state.playing === id) { audio.pause(); state.playing = null; setIdle(); }
     refresh();
   }
 
-  // ---- player ----
-  const audio = $("om-audio");
-  function play(id) {
+  // ---- lyrics modal ----
+  function showLyrics(id) {
     const s = state.songs.find((x) => x.id === id);
     if (!s) return;
+    $("om-lyrics-title").textContent = s.title || "Untitled";
+    $("om-lyrics-style").textContent = s.style || s.tags || "";
+    const ly = (s.lyrics || "").trim();
+    $("om-lyrics-body").textContent = ly && ly !== "[Instrumental]" ? ly
+      : s.status === "generating" ? "生成中,歌词稍后可见…" : "纯音乐 · 无歌词";
+    $("om-lyrics").hidden = false;
+  }
+  const closeLyrics = () => { $("om-lyrics").hidden = true; };
+  $("om-lyrics-x").onclick = closeLyrics;
+  $("om-lyrics").onclick = (e) => { if (e.target === $("om-lyrics")) closeLyrics(); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLyrics(); });
+
+  // ---- persistent player ----
+  const audio = $("om-audio");
+  function setNowCover(url) {
+    const el = $("om-now-cover");
+    if (url) { el.style.backgroundImage = `url("${url}")`; el.textContent = ""; }
+    else { el.style.backgroundImage = ""; el.textContent = "♪"; }
+  }
+  function setIdle() {
+    $("om-player").classList.add("idle");
+    $("om-now-title").textContent = "—";
+    $("om-now-style").textContent = "";
+    setNowCover("");
+    $("om-play").textContent = "▶";
+  }
+  function play(id) {
+    const s = state.songs.find((x) => x.id === id);
+    if (!s || !s.hasAudio) return;
     state.playing = id;
     audio.src = mediaURL(id, "mp3");
     audio.play();
-    $("om-player").hidden = false;
+    $("om-player").classList.remove("idle");
     $("om-now-title").textContent = s.title || "Untitled";
     $("om-now-style").textContent = s.style || s.tags || "";
-    $("om-now-cover").src = s.hasCover ? mediaURL(id, "jpg") : "";
+    setNowCover(s.hasCover ? mediaURL(id, "jpg") : "");
     $("om-play").textContent = "⏸";
+    renderList(); // reflect the "playing" highlight
   }
-  $("om-play").onclick = () => { if (audio.paused) { audio.play(); $("om-play").textContent = "⏸"; } else { audio.pause(); $("om-play").textContent = "▶"; } };
   const playable = () => state.songs.filter((s) => s.status === "done" && s.hasAudio);
-  const step = (d) => { const ps = playable(); const i = ps.findIndex((s) => s.id === state.playing); if (ps.length) play(ps[(i + d + ps.length) % ps.length].id); };
+  $("om-play").onclick = () => {
+    if (!state.playing) { const ps = playable(); if (ps.length) play(ps[0].id); return; }
+    if (audio.paused) { audio.play(); $("om-play").textContent = "⏸"; } else { audio.pause(); $("om-play").textContent = "▶"; }
+  };
+  const step = (d) => { const ps = playable(); if (!ps.length) return; const i = ps.findIndex((s) => s.id === state.playing); play(ps[(i + d + ps.length) % ps.length].id); };
   $("om-next").onclick = () => step(1);
   $("om-prev").onclick = () => step(-1);
   audio.ontimeupdate = () => { $("om-cur").textContent = fmtTime(audio.currentTime); if (audio.duration) $("om-bar").value = (audio.currentTime / audio.duration) * 100; };
@@ -124,6 +157,7 @@
   audio.onended = () => step(1);
   $("om-bar").oninput = (e) => { if (audio.duration) audio.currentTime = (e.target.value / 100) * audio.duration; };
 
-  refresh(); // initial load (and resume polling if something is still generating)
+  setIdle();
+  refresh();
   if (state.songs?.some?.((s) => s.status === "generating")) startPolling();
 })();

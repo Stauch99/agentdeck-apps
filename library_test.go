@@ -24,12 +24,15 @@ func TestLibraryLifecycle(t *testing.T) {
 	}
 
 	// Materialize replaces the placeholder ID with the real audioId.
-	got, err := lib.Materialize("task1", 0, Track{ID: "aud0", Title: "Real Title", Tags: "lofi,chill", Duration: 123})
+	got, err := lib.Materialize("task1", 0, Track{ID: "aud0", Title: "Real Title", Tags: "lofi,chill", Prompt: "[Verse]\nsunlight on the floor", Duration: 123})
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
 	if got.ID != "aud0" || got.Title != "Real Title" || got.Tags != "lofi,chill" || got.Duration != 123 {
 		t.Fatalf("materialize did not map track: %+v", got)
+	}
+	if got.Lyrics != "[Verse]\nsunlight on the floor" {
+		t.Fatalf("lyrics not captured from track.prompt: %q", got.Lyrics)
 	}
 	if got.Status != "generating" {
 		t.Fatalf("status should stay generating until media saved, got %s", got.Status)
