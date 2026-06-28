@@ -49,7 +49,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("embed web: %v", err)
 	}
-	svc := NewService(NewClient(baseURL, apiKey), lib)
+	client := NewClient(baseURL, apiKey)
+	if cb := os.Getenv("KIE_CALLBACK_URL"); cb != "" {
+		client.callbackURL = cb // optional: a real public callback endpoint if you ever expose one; we poll regardless
+	}
+	svc := NewService(client, lib)
 	svc.baseCtx = ctx
 	// Dev/test escape hatch: permit media downloads from loopback/private hosts (e.g. the fake-kie harness).
 	// Unset in production so the SSRF guard blocks internal targets; real kie media lives on public CDNs.

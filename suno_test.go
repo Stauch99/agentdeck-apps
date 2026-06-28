@@ -36,9 +36,9 @@ func TestGenerateParsesTaskID(t *testing.T) {
 	if err != nil || id != "T-1" {
 		t.Fatalf("Generate => %q, %v", id, err)
 	}
-	// callBackUrl must NOT be sent (pure polling); customMode/model must be present.
-	if _, ok := gotBody["callBackUrl"]; ok {
-		t.Errorf("callBackUrl should be omitted")
+	// kie REQUIRES callBackUrl (422 without it) even though we poll — it must be present; customMode/model too.
+	if cb, _ := gotBody["callBackUrl"].(string); cb == "" {
+		t.Errorf("callBackUrl must be sent (kie requires it), got %v", gotBody["callBackUrl"])
 	}
 	if gotBody["model"] != "V4_5ALL" || gotBody["customMode"] != true {
 		t.Errorf("body missing fields: %v", gotBody)
@@ -76,6 +76,27 @@ func TestRecordInfoParsesTracks(t *testing.T) {
 	}
 }
 
+// TestRecordInfoParsesRealResponse locks the real kie.ai shape: createTime is a NUMBER (not string),
+// and the payload carries extra source* fields. This is the exact shape that broke the first live run.
+func TestRecordInfoParsesRealResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"code":200,"msg":"success","data":{"taskId":"T","status":"SUCCESS","errorCode":null,"errorMessage":null,"response":{"taskId":"T","sunoData":[
+			{"id":"uuid-0","audioUrl":"https://tempfile.x/a0.mp3","sourceAudioUrl":"https://cdn1.suno.ai/a0.mp3","streamAudioUrl":"https://musicfile.kie.ai/s0","imageUrl":"https://musicfile.kie.ai/i0.jpeg","prompt":"[Instrumental]","modelName":"chirp-auk-turbo","title":"Midnight Study Loop","tags":"lo-fi","createTime":1782616959537,"duration":149.48}
+		]}}}`))
+	}))
+	defer srv.Close()
+	status, tracks, errMsg, err := NewClient(srv.URL, "k").RecordInfo(context.Background(), "T")
+	if err != nil {
+		t.Fatalf("RecordInfo errored on real shape: %v", err)
+	}
+	if status != "SUCCESS" || errMsg != "" || len(tracks) != 1 {
+		t.Fatalf("RecordInfo => %s %q %d tracks", status, errMsg, len(tracks))
+	}
+	if tracks[0].ID != "uuid-0" || tracks[0].Title != "Midnight Study Loop" || tracks[0].Duration != 149.48 || tracks[0].CreateTime != 1782616959537 {
+		t.Fatalf("track not parsed: %+v", tracks[0])
+	}
+}
+
 func TestValidateCustomModeRequiresFields(t *testing.T) {
 	cases := []struct {
 		name string
@@ -95,6 +116,64 @@ func TestValidateCustomModeRequiresFields(t *testing.T) {
 				t.Fatalf("Validate ok=%v, err=%v", tc.ok, err)
 			}
 		})
+	}
+}
+
+// TestServicePollRetriesLaggingTrack locks the real-world case that broke live: at FIRST_SUCCESS the
+// second track's audioUrl is still empty, so it must be skipped (not errored) and retried at SUCCESS.
+func TestServicePollRetriesLaggingTrack(t *testing.T) {
+	calls := 0
+	var base string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/v1/generate") && r.Method == http.MethodPost:
+			w.Write([]byte(`{"code":200,"msg":"ok","data":{"taskId":"TL"}}`))
+		case strings.HasPrefix(r.URL.Path, "/api/v1/generate/record-info"):
+			calls++
+			if calls == 1 { // FIRST_SUCCESS: a0 ready, a1 audioUrl still empty
+				fmt.Fprintf(w, `{"code":200,"msg":"ok","data":{"status":"FIRST_SUCCESS","response":{"sunoData":[
+					{"id":"a0","audioUrl":"%s/m/a0.mp3","imageUrl":"%s/m/a0.jpg","title":"One","duration":120},
+					{"id":"a1","audioUrl":"","title":"Two"}
+				]}}}`, base, base)
+				return
+			}
+			fmt.Fprintf(w, `{"code":200,"msg":"ok","data":{"status":"SUCCESS","response":{"sunoData":[
+				{"id":"a0","audioUrl":"%s/m/a0.mp3","imageUrl":"%s/m/a0.jpg","title":"One","duration":120},
+				{"id":"a1","audioUrl":"%s/m/a1.mp3","imageUrl":"%s/m/a1.jpg","title":"Two","duration":121}
+			]}}}`, base, base, base, base)
+		case strings.HasPrefix(r.URL.Path, "/m/"):
+			w.Write([]byte("BINARY:" + r.URL.Path))
+		}
+	}))
+	defer srv.Close()
+	base = srv.URL
+
+	lib, _ := NewLibrary(t.TempDir())
+	svc := NewService(NewClient(srv.URL, "k"), lib)
+	svc.interval = 5 * time.Millisecond
+	svc.timeout = 2 * time.Second
+	svc.blockPrivateHosts = false
+
+	if _, err := svc.Submit(context.Background(), GenerateRequest{CustomMode: false, Model: "V4", Prompt: "hi"}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		done := 0
+		for _, s := range lib.List() {
+			if s.Status == "done" {
+				done++
+			}
+		}
+		if done == 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	for _, s := range lib.List() {
+		if s.Status != "done" || !s.HasAudio {
+			t.Fatalf("lagging track was not retried to done: %+v", s)
+		}
 	}
 }
 

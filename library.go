@@ -179,17 +179,3 @@ func (l *Library) save() {
 		log.Printf("library: save %s failed: %v", l.path, err)
 	}
 }
-
-// markErrorByID flips a single song to error by its id. (introduced in Task 4; suno.go calls it)
-func (l *Library) markErrorByID(id, msg string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	for i := range l.songs {
-		if l.songs[i].ID == id {
-			l.songs[i].Status = "error"
-			l.songs[i].ErrorMessage = msg
-			l.save()
-			return
-		}
-	}
-}

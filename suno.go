@@ -29,7 +29,7 @@ type Track struct {
 	Prompt         string  `json:"prompt"`
 	ModelName      string  `json:"modelName"`
 	Duration       float64 `json:"duration"`
-	CreateTime     string  `json:"createTime"`
+	CreateTime     int64   `json:"createTime"` // kie sends Unix-millis NUMBER (docs wrongly said string) — must not be string or Unmarshal fails
 }
 
 var validModels = map[string]bool{
@@ -78,25 +78,29 @@ type envelope struct {
 }
 
 type Client struct {
-	baseURL string
-	apiKey  string
-	http    *http.Client
+	baseURL     string
+	apiKey      string
+	callbackURL string // kie REQUIRES callBackUrl even when polling; default placeholder, never actually used
+	http        *http.Client
 }
 
 func NewClient(baseURL, apiKey string) *Client {
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		http:    &http.Client{Timeout: 30 * time.Second},
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		apiKey:      apiKey,
+		callbackURL: "https://example.com/openmusic/callback", // we poll record-info; this exists only to satisfy kie's required field
+		http:        &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-// kieGenBody is the wire body; omitempty drops unset optionals and never adds callBackUrl.
+// kieGenBody is the wire body; omitempty drops unset optionals. callBackUrl is required by kie (422 without it)
+// even though we poll record-info, so it is always sent.
 type kieGenBody struct {
 	Prompt              string   `json:"prompt,omitempty"`
 	CustomMode          bool     `json:"customMode"`
 	Instrumental        bool     `json:"instrumental"`
 	Model               string   `json:"model"`
+	CallBackUrl         string   `json:"callBackUrl"`
 	Style               string   `json:"style,omitempty"`
 	Title               string   `json:"title,omitempty"`
 	NegativeTags        string   `json:"negativeTags,omitempty"`
@@ -138,7 +142,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*envelo
 func (c *Client) Generate(ctx context.Context, r GenerateRequest) (string, error) {
 	env, err := c.do(ctx, http.MethodPost, "/api/v1/generate", kieGenBody{
 		Prompt: r.Prompt, CustomMode: r.CustomMode, Instrumental: r.Instrumental,
-		Model: r.Model, Style: r.Style, Title: r.Title, NegativeTags: r.NegativeTags,
+		Model: r.Model, CallBackUrl: c.callbackURL, Style: r.Style, Title: r.Title, NegativeTags: r.NegativeTags,
 		VocalGender: r.VocalGender, StyleWeight: r.StyleWeight, WeirdnessConstraint: r.WeirdnessConstraint,
 	})
 	if err != nil {
@@ -218,10 +222,16 @@ func (s *Service) Submit(ctx context.Context, r GenerateRequest) (string, error)
 // poll drives one task to completion: 10s ticks until SUCCESS/failure/timeout, or until ctx is cancelled
 // (graceful shutdown). Tracks are deduplicated by track ID and assigned stable placeholder slots in arrival
 // order, so a reorder between FIRST_SUCCESS and SUCCESS never skips or double-writes a candidate.
+// poll drives one task to completion. Tracks are keyed by ID and get a stable placeholder slot when first
+// PROCESSED (not merely seen), so a track whose audioUrl is still empty at FIRST_SUCCESS is left for a later
+// tick instead of being prematurely errored. After SUCCESS we keep retrying not-yet-downloaded media for a
+// bounded window (kie's per-track audioUrl can lag, and the temp CDN can blip); only then do stragglers error.
 func (s *Service) poll(ctx context.Context, taskID string) {
-	slot := map[string]int{} // trackID -> placeholder index (stable, arrival order)
+	slot := map[string]int{}  // trackID -> placeholder index (assigned on first real processing)
+	done := map[string]bool{} // trackID -> media cached + marked done
 	next := 0
 	deadline := time.Now().Add(s.timeout)
+	var successDeadline time.Time // bounded media-retry window opened when SUCCESS first seen
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 	for {
@@ -245,22 +255,42 @@ func (s *Service) poll(ctx context.Context, taskID string) {
 			// keep waiting
 		case "FIRST_SUCCESS", "SUCCESS":
 			for _, tr := range tracks {
-				if _, seen := slot[tr.ID]; seen {
-					continue // already handled this track in an earlier poll
+				if done[tr.ID] || tr.AudioURL == "" {
+					continue // already cached, or audio not ready on this track yet — retry next tick
 				}
-				if next >= 2 {
-					continue // only two candidate slots exist per task
+				idx, ok := slot[tr.ID]
+				if !ok {
+					if next >= 2 {
+						continue // only two candidate slots exist per task
+					}
+					idx, next = next, next+1
+					slot[tr.ID] = idx
 				}
-				idx := next
-				next++
-				slot[tr.ID] = idx
 				if _, err := s.lib.Materialize(taskID, idx, tr); err != nil {
 					continue
 				}
-				s.cacheMedia(tr)
+				if s.cacheMedia(tr) {
+					done[tr.ID] = true
+				}
 			}
 			if status == "SUCCESS" {
-				return
+				if successDeadline.IsZero() {
+					successDeadline = time.Now().Add(60 * time.Second)
+				}
+				allDone := len(tracks) > 0
+				for _, tr := range tracks {
+					if !done[tr.ID] {
+						allDone = false
+					}
+				}
+				if allDone {
+					return
+				}
+				if time.Now().After(successDeadline) {
+					s.lib.MarkError(taskID, "media download unavailable") // give up on stragglers
+					return
+				}
+				// else keep ticking to retry the not-yet-downloaded tracks
 			}
 		default: // CREATE_TASK_FAILED / GENERATE_AUDIO_FAILED / CALLBACK_EXCEPTION / SENSITIVE_WORD_ERROR
 			msg := errMsg
@@ -273,28 +303,26 @@ func (s *Service) poll(ctx context.Context, taskID string) {
 	}
 }
 
-// cacheMedia downloads audio+cover into the volume and flips the song to done.
-func (s *Service) cacheMedia(t Track) {
-	hasAudio := false
-	if b, err := s.fetch(t.AudioURL); err == nil {
-		if s.lib.SaveMedia(t.ID, "mp3", b) == nil {
-			hasAudio = true
-		}
+// cacheMedia downloads audio (required) + cover (best-effort) into the volume and marks the song done.
+// Returns false if the audio could not be fetched/saved — the poll loop retries on a later tick.
+func (s *Service) cacheMedia(t Track) bool {
+	b, err := s.fetch(t.AudioURL)
+	if err != nil {
+		return false
+	}
+	if err := s.lib.SaveMedia(t.ID, "mp3", b); err != nil {
+		return false
 	}
 	hasCover := false
 	if t.ImageURL != "" {
-		if b, err := s.fetch(t.ImageURL); err == nil {
-			if s.lib.SaveMedia(t.ID, "jpg", b) == nil {
+		if cb, err := s.fetch(t.ImageURL); err == nil {
+			if s.lib.SaveMedia(t.ID, "jpg", cb) == nil {
 				hasCover = true
 			}
 		}
 	}
-	if hasAudio {
-		s.lib.MarkDone(t.ID, hasAudio, hasCover)
-		return
-	}
-	// audio failed: flip just this song to error by id
-	s.lib.markErrorByID(t.ID, "audio download failed")
+	s.lib.MarkDone(t.ID, true, hasCover)
+	return true
 }
 
 // fetch downloads a media URL with SSRF + size guards: only http/https, optionally refuse private/loopback
