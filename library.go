@@ -129,6 +129,19 @@ func (l *Library) MarkDone(id string, hasAudio, hasCover bool) error {
 	return fmt.Errorf("song not found: %s", id)
 }
 
+// SetLyrics fills in a song's lyrics by id (used to backfill songs materialized before lyrics capture existed).
+func (l *Library) SetLyrics(id, lyrics string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i := range l.songs {
+		if l.songs[i].ID == id && l.songs[i].Lyrics != lyrics {
+			l.songs[i].Lyrics = lyrics
+			l.save()
+			return
+		}
+	}
+}
+
 func (l *Library) MarkError(taskID, msg string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

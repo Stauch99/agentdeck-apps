@@ -136,22 +136,24 @@
     if (!s || !s.hasAudio) return;
     state.playing = id;
     audio.src = mediaURL(id, "mp3");
-    audio.play();
+    audio.play().catch(() => {}); // ignore autoplay rejection; onplay/onpause keep the icon honest
     $("om-player").classList.remove("idle");
     $("om-now-title").textContent = s.title || "Untitled";
     $("om-now-style").textContent = s.style || s.tags || "";
     setNowCover(s.hasCover ? mediaURL(id, "jpg") : "");
-    $("om-play").textContent = "⏸";
     renderList(); // reflect the "playing" highlight
   }
   const playable = () => state.songs.filter((s) => s.status === "done" && s.hasAudio);
   $("om-play").onclick = () => {
     if (!state.playing) { const ps = playable(); if (ps.length) play(ps[0].id); return; }
-    if (audio.paused) { audio.play(); $("om-play").textContent = "⏸"; } else { audio.pause(); $("om-play").textContent = "▶"; }
+    if (audio.paused) audio.play().catch(() => {}); else audio.pause();
   };
   const step = (d) => { const ps = playable(); if (!ps.length) return; const i = ps.findIndex((s) => s.id === state.playing); play(ps[(i + d + ps.length) % ps.length].id); };
   $("om-next").onclick = () => step(1);
   $("om-prev").onclick = () => step(-1);
+  // the play/pause icon mirrors the REAL audio state — fixes the desync where it lied after a pause/end
+  audio.onplay = () => { $("om-play").textContent = "⏸"; };
+  audio.onpause = () => { $("om-play").textContent = "▶"; };
   audio.ontimeupdate = () => { $("om-cur").textContent = fmtTime(audio.currentTime); if (audio.duration) $("om-bar").value = (audio.currentTime / audio.duration) * 100; };
   audio.onloadedmetadata = () => $("om-dur").textContent = fmtTime(audio.duration);
   audio.onended = () => step(1);

@@ -60,6 +60,7 @@ func main() {
 	if envOr("OPENMUSIC_ALLOW_PRIVATE_MEDIA", "") != "" {
 		svc.blockPrivateHosts = false
 	}
+	go svc.BackfillLyrics(ctx) // fill lyrics for songs materialized before lyrics capture existed
 	srv := NewServer(svc, lib, web)
 
 	httpSrv := &http.Server{Addr: addr, Handler: srv.Handler()}

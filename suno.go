@@ -349,6 +349,35 @@ func (s *Service) fetch(rawURL string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(resp.Body, s.maxFetchBytes))
 }
 
+// BackfillLyrics fills lyrics for done songs that were materialized before lyrics capture existed.
+// Best-effort, one RecordInfo per distinct task; meant to run once at startup in a goroutine.
+func (s *Service) BackfillLyrics(ctx context.Context) {
+	need := map[string]bool{} // taskID -> needs a lyrics lookup
+	for _, sg := range s.lib.List() {
+		if sg.Status == "done" && sg.Lyrics == "" && sg.TaskID != "" {
+			need[sg.TaskID] = true
+		}
+	}
+	for taskID := range need {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		_, tracks, _, err := s.client.RecordInfo(rctx, taskID)
+		cancel()
+		if err != nil {
+			continue
+		}
+		for _, tr := range tracks {
+			if tr.Prompt != "" {
+				s.lib.SetLyrics(tr.ID, tr.Prompt)
+			}
+		}
+	}
+}
+
 // isPrivateHost reports whether host resolves to a loopback/private/link-local address (SSRF guard).
 // Unresolvable or empty hosts are treated as unsafe.
 func isPrivateHost(host string) bool {

@@ -97,6 +97,29 @@ func TestRecordInfoParsesRealResponse(t *testing.T) {
 	}
 }
 
+func TestBackfillLyrics(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"code":200,"msg":"ok","data":{"status":"SUCCESS","response":{"sunoData":[
+			{"id":"old0","audioUrl":"x","prompt":"[Verse]\nbackfilled lyrics","title":"Old","duration":100}
+		]}}}`))
+	}))
+	defer srv.Close()
+
+	lib, _ := NewLibrary(t.TempDir())
+	lib.AddPlaceholders("oldtask", "V4", "", "Old", 1)
+	lib.Materialize("oldtask", 0, Track{ID: "old0", Title: "Old"}) // no Prompt -> lyrics empty (pre-feature song)
+	lib.MarkDone("old0", true, false)
+	if lib.List()[0].Lyrics != "" {
+		t.Fatalf("precondition: lyrics should start empty")
+	}
+
+	NewService(NewClient(srv.URL, "k"), lib).BackfillLyrics(context.Background())
+
+	if got := lib.List()[0].Lyrics; got != "[Verse]\nbackfilled lyrics" {
+		t.Fatalf("lyrics not backfilled: %q", got)
+	}
+}
+
 func TestValidateCustomModeRequiresFields(t *testing.T) {
 	cases := []struct {
 		name string
