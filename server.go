@@ -41,6 +41,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/generate", s.handleGenerate)
 	mux.HandleFunc("/api/songs", s.handleSongs)
 	mux.HandleFunc("/api/songs/", s.handleSongDelete)
+	mux.HandleFunc("/api/artifacts", s.handleArtifacts) // 文件库元数据: done 歌曲 → {id,title}
 	mux.HandleFunc("/media/", s.handleMedia)
 	mux.Handle("/", http.FileServer(http.FS(s.web)))
 	return securityHeaders(mux)
@@ -83,6 +84,24 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSongs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"songs": s.lib.List()})
+}
+
+// handleArtifacts —— AgentDeck 文件库元数据契约 {items:[{id,title}]}.
+// 仅暴露 done 且有音频的歌曲; id == media/<id>.mp3 的 stem, 供文件库把原始文件名美化为歌名。
+func (s *Server) handleArtifacts(w http.ResponseWriter, r *http.Request) {
+	songs := s.lib.List()
+	items := make([]map[string]string, 0, len(songs))
+	for _, sg := range songs {
+		if sg.Status != "done" || !sg.HasAudio {
+			continue
+		}
+		title := sg.Title
+		if title == "" {
+			title = "未命名"
+		}
+		items = append(items, map[string]string{"id": sg.ID, "title": title})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (s *Server) handleSongDelete(w http.ResponseWriter, r *http.Request) {
