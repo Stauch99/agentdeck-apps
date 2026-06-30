@@ -1,4 +1,4 @@
-// OpenMusic frontend — step-by-step creation wizard (left panel), workspace list, persistent player, lyrics modal.
+// OpenMusic frontend — beginner-friendly step wizard (left panel), workspace list, persistent player, lyrics modal.
 // All API calls are relative so the app works behind AgentDeck's /agent/openmusic/ proxy.
 (() => {
   "use strict";
@@ -9,37 +9,42 @@
 
   const state = { playing: null, songs: [] };
 
-  // ============ STEP WIZARD ============
-  // Each "Create" walks the user through the params one screen at a time, then assembles the same
-  // GenerateRequest the old dense form produced. customMode is inferred (write/instrumental need it).
+  // ============ STEP WIZARD (beginner-friendly, no jargon) ============
+  // Plain-language screens; the assembled GenerateRequest stays hidden. Model / weirdness / style-influence
+  // use sensible defaults, the song name auto-fills if left blank, and "style" is picked via friendly chips.
   const WIZ_MODES = [
-    { k: "write", icon: "✎", t: "我自己写词", d: "把歌词敲进去" },
-    { k: "prompt", icon: "✨", t: "给个想法,AI 写词", d: "描述就行,AI 来填词" },
-    { k: "instrumental", icon: "♪", t: "纯音乐,不要词", d: "只要旋律" },
+    { k: "write", icon: "✎", t: "我自己写词", d: "把想好的词写进去" },
+    { k: "prompt", icon: "✨", t: "我说想法,帮我写词", d: "描述一下就行" },
+    { k: "instrumental", icon: "♪", t: "纯音乐就好", d: "只要旋律,不唱" },
   ];
-  const WIZ_MODELS = [["V4_5ALL", "v4.5-all"], ["V5_5", "v5.5"], ["V4_5PLUS", "v4.5-plus"], ["V4_5", "v4.5"], ["V4", "v4"], ["V3_5", "v3.5"]];
-  const WIZ_DEFAULTS = { step: 0, mode: "", prompt: "", style: "", negative: "", vocal: "", model: "V4_5ALL", weird: 50, styleInf: 50, title: "", busy: false };
-  const wiz = { ...WIZ_DEFAULTS };
+  // friendly genre chips — label shown to the user, value is the style wording Suno understands best
+  const WIZ_GENRES = [
+    ["流行", "pop"], ["民谣", "acoustic folk"], ["电子", "electronic, synth"],
+    ["摇滚", "rock"], ["嘻哈", "hip hop"], ["R&B", "R&B, soul"],
+    ["古风", "chinese style, traditional"], ["治愈", "lo-fi, chill, soft"],
+    ["浪漫", "romantic ballad"], ["欢快", "upbeat, happy"],
+  ];
+  const WIZ_DEFAULTS = { step: 0, mode: "", prompt: "", styleText: "", vocal: "", title: "", busy: false };
+  const wiz = { ...WIZ_DEFAULTS, genres: [] };
 
-  // write/instrumental carry lyrics-or-no-vocals, which kie only honors in customMode (=> style+title required).
   const wizCustom = () => wiz.mode === "write" || wiz.mode === "instrumental";
+  const wizStyle = () => wiz.genres.map((i) => WIZ_GENRES[i][1]).concat(wiz.styleText.trim() ? [wiz.styleText.trim()] : []).join(", ");
   function wizSteps() {
     const s = ["mode"];
     if (wiz.mode !== "instrumental") s.push("words");
-    s.push("style", "tune");
+    s.push("vibe", "name");
     return s;
   }
   function canAdvance(k) {
     if (k === "mode") return !!wiz.mode;
     if (k === "words") return wiz.prompt.trim() !== "";
-    if (k === "style") return wizCustom() ? wiz.style.trim() !== "" : true;
-    if (k === "tune") return wizCustom() ? wiz.title.trim() !== "" : true;
-    return true;
+    if (k === "vibe") return wizCustom() ? wizStyle() !== "" : true; // 自己写词/纯音乐需要一个风格;AI 写词可跳过
+    return true; // 起名永远可选(留空会自动起)
   }
 
   function wizBody(k) {
     if (k === "mode") {
-      return `<div class="om-wiz-q">你想怎么开始这首歌?</div>
+      return `<div class="om-wiz-q">想做一首什么样的歌?</div>
         <div class="om-choices">${WIZ_MODES.map((m) => `
           <button class="om-choice${wiz.mode === m.k ? " on" : ""}" data-mode="${m.k}">
             <span class="om-choice-ic">${m.icon}</span>
@@ -48,31 +53,25 @@
     }
     if (k === "words") {
       const write = wiz.mode === "write";
-      return `<div class="om-wiz-q">${write ? "写下你的歌词" : "描述这首歌讲什么"}</div>
-        <textarea class="om-text om-grow" id="wz-prompt" placeholder="${write ? "一行一句,空行分段…" : "比如:一首关于深夜城市霓虹与追梦的歌…"}">${esc(wiz.prompt)}</textarea>`;
+      return `<div class="om-wiz-q">${write ? "把你的词写在这里" : "这首歌想讲什么?"}</div>
+        <textarea class="om-text om-grow" id="wz-prompt" placeholder="${write ? "一行一句,空一行换段…" : "随便说说,比如:一个关于夏天和海边的小故事…"}">${esc(wiz.prompt)}</textarea>`;
     }
-    if (k === "style") {
-      const opt = wizCustom() ? "" : ` <span class="om-opt">(可留空)</span>`;
-      return `<div class="om-wiz-q">想要什么风格氛围?${opt}</div>
-        <textarea class="om-text" id="wz-style" rows="4" placeholder="e.g. synthwave, retro 80s, warm analog pads, 110 BPM">${esc(wiz.style)}</textarea>
-        <input class="om-input" id="wz-negative" placeholder="不想要的风格(可选)" value="${esc(wiz.negative)}" />
-        ${wiz.mode === "instrumental" ? "" : `<div class="om-wiz-sub">人声</div>
-          <div class="om-seg-mini" id="wz-vocal">
-            <button data-vocal=""${wiz.vocal === "" ? ' class="on"' : ""}>自动</button>
-            <button data-vocal="m"${wiz.vocal === "m" ? ' class="on"' : ""}>男声</button>
-            <button data-vocal="f"${wiz.vocal === "f" ? ' class="on"' : ""}>女声</button>
-          </div>`}`;
+    if (k === "vibe") {
+      const chips = WIZ_GENRES.map(([label], i) => `<button class="om-chip${wiz.genres.includes(i) ? " on" : ""}" data-genre="${i}">${label}</button>`).join("");
+      const vocal = wiz.mode === "instrumental" ? "" : `<div class="om-wiz-sub">想要谁来唱?</div>
+        <div class="om-seg-mini" id="wz-vocal">
+          <button data-vocal=""${wiz.vocal === "" ? ' class="on"' : ""}>都行</button>
+          <button data-vocal="m"${wiz.vocal === "m" ? ' class="on"' : ""}>男声</button>
+          <button data-vocal="f"${wiz.vocal === "f" ? ' class="on"' : ""}>女声</button>
+        </div>`;
+      return `<div class="om-wiz-q">想要什么感觉?${wizCustom() ? "" : ` <span class="om-opt">(可跳过)</span>`}</div>
+        <div class="om-chips">${chips}</div>
+        <textarea class="om-text" id="wz-styletext" rows="3" placeholder="也可以用大白话说说,比如:轻快一点,适合开车时听…">${esc(wiz.styleText)}</textarea>
+        ${vocal}`;
     }
-    const titleOpt = wizCustom() ? "" : ` <span class="om-opt">(可选)</span>`;
-    return `<div class="om-wiz-q">最后,微调和命名 <span class="om-opt">(可跳过)</span></div>
-      <div class="om-wiz-sub">模型</div>
-      <select class="om-input" id="wz-model">${WIZ_MODELS.map(([v, l]) => `<option value="${v}"${wiz.model === v ? " selected" : ""}>${l}</option>`).join("")}</select>
-      <div class="om-wiz-sub">Weirdness <b id="wz-weird-v">${wiz.weird}%</b></div>
-      <input class="om-slider" id="wz-weird" type="range" min="0" max="100" value="${wiz.weird}" />
-      <div class="om-wiz-sub">Style Influence <b id="wz-styleinf-v">${wiz.styleInf}%</b></div>
-      <input class="om-slider" id="wz-styleinf" type="range" min="0" max="100" value="${wiz.styleInf}" />
-      <div class="om-wiz-sub">歌名${titleOpt}</div>
-      <input class="om-input" id="wz-title" placeholder="${wizCustom() ? "给它起个名字" : "可留空"}" value="${esc(wiz.title)}" />`;
+    return `<div class="om-wiz-q">给它起个名字吧 <span class="om-opt">(可留空,我帮你起)</span></div>
+      <input class="om-input" id="wz-title" placeholder="比如:夏天的风" value="${esc(wiz.title)}" />
+      <div class="om-wiz-hint">点「生成」就开始,大概要等一两分钟。</div>`;
   }
 
   function renderWiz() {
@@ -101,10 +100,13 @@
     const root = $("om-wiz");
     root.querySelectorAll("[data-mode]").forEach((b) => b.onclick = () => { wiz.mode = b.dataset.mode; wiz.step = 1; renderWiz(); });
     const bind = (id, key) => { const e = $(id); if (e) e.oninput = () => { wiz[key] = e.value; updateNext(k); }; };
-    bind("wz-prompt", "prompt"); bind("wz-style", "style"); bind("wz-negative", "negative"); bind("wz-title", "title");
-    if ($("wz-model")) $("wz-model").onchange = (e) => wiz.model = e.target.value;
-    if ($("wz-weird")) $("wz-weird").oninput = (e) => { wiz.weird = +e.target.value; $("wz-weird-v").textContent = wiz.weird + "%"; };
-    if ($("wz-styleinf")) $("wz-styleinf").oninput = (e) => { wiz.styleInf = +e.target.value; $("wz-styleinf-v").textContent = wiz.styleInf + "%"; };
+    bind("wz-prompt", "prompt"); bind("wz-styletext", "styleText"); bind("wz-title", "title");
+    root.querySelectorAll("[data-genre]").forEach((b) => b.onclick = () => {
+      const i = +b.dataset.genre, at = wiz.genres.indexOf(i);
+      if (at >= 0) wiz.genres.splice(at, 1); else wiz.genres.push(i);
+      b.classList.toggle("on");
+      updateNext(k);
+    });
     const vocal = $("wz-vocal");
     if (vocal) vocal.querySelectorAll("[data-vocal]").forEach((b) => b.onclick = () => { wiz.vocal = b.dataset.vocal; vocal.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); });
     if ($("wz-back")) $("wz-back").onclick = () => { if (wiz.step > 0) { wiz.step--; renderWiz(); } };
@@ -113,26 +115,31 @@
 
   async function submitWiz() {
     const instrumental = wiz.mode === "instrumental";
+    let title = wiz.title.trim();
+    if (!title) { // never leave it blank — kie needs a title when we write lyrics / go instrumental
+      const firstLine = (wiz.prompt || "").split("\n").map((s) => s.trim()).find((s) => s && !s.startsWith("["));
+      title = (firstLine || "我的作品").slice(0, 24);
+    }
     const body = {
       customMode: wizCustom(),
-      model: wiz.model,
+      model: "V4_5ALL",
       instrumental,
       prompt: instrumental ? "" : wiz.prompt.trim(),
-      style: wiz.style.trim(),
-      negativeTags: wiz.negative.trim(),
-      title: wiz.title.trim(),
+      style: wizStyle(),
+      negativeTags: "",
+      title,
       vocalGender: wiz.vocal,
-      styleWeight: wiz.styleInf / 100,
-      weirdnessConstraint: wiz.weird / 100,
+      styleWeight: 0.5,
+      weirdnessConstraint: 0.5,
     };
     wiz.busy = true;
     const n = $("wz-next"); if (n) { n.disabled = true; n.textContent = "生成中…"; }
     try {
       const res = await fetch("api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); alert("生成失败: " + (e.error || res.status)); wiz.busy = false; renderWiz(); return; }
-      Object.assign(wiz, WIZ_DEFAULTS); // reset to step 1 for the next song
+      if (!res.ok) { const e = await res.json().catch(() => ({})); alert("没成功,再试一次:" + (e.error || res.status)); wiz.busy = false; renderWiz(); return; }
+      Object.assign(wiz, WIZ_DEFAULTS, { genres: [] });
       startPolling();
-    } catch (e) { alert("网络错误: " + e); }
+    } catch (e) { alert("网络好像断了,检查下连接:" + e); }
     wiz.busy = false;
     renderWiz();
   }
@@ -158,8 +165,8 @@
     const el = $("om-list");
     el.innerHTML = state.songs.map((s) => {
       const cover = s.hasCover ? mediaURL(s.id, "jpg") : "";
-      const badge = s.status === "generating" ? "生成中…" : s.status === "error" ? "失败" : (s.model || "");
-      const sub = s.status === "error" ? esc(s.errorMessage || "generation failed") : esc(s.style || s.tags || "");
+      const badge = s.status === "generating" ? "生成中…" : s.status === "error" ? "失败" : "";
+      const sub = s.status === "error" ? esc(s.errorMessage || "没生成成功") : esc(s.style || s.tags || "");
       const playing = state.playing === s.id ? " playing" : "";
       const actions =
         (s.status === "done" && s.hasAudio ? `<button class="om-card-play" data-play="${esc(s.id)}">▶</button>` : "") +
@@ -167,7 +174,7 @@
       return `<div class="om-card ${esc(s.status)}${playing}">
         <div class="om-cover">${cover ? `<img src="${esc(cover)}" alt="">` : "♪"}</div>
         <div class="om-card-body" data-lyrics="${esc(s.id)}" title="查看歌词">
-          <div class="om-card-title">${esc(s.title || "Untitled")}</div>
+          <div class="om-card-title">${esc(s.title || "未命名")}</div>
           <div class="om-card-sub">${sub}</div>
         </div>
         <span class="om-card-badge">${esc(badge)}</span>${actions}
@@ -188,11 +195,11 @@
   function showLyrics(id) {
     const s = state.songs.find((x) => x.id === id);
     if (!s) return;
-    $("om-lyrics-title").textContent = s.title || "Untitled";
+    $("om-lyrics-title").textContent = s.title || "未命名";
     $("om-lyrics-style").textContent = s.style || s.tags || "";
     const ly = (s.lyrics || "").trim();
     $("om-lyrics-body").textContent = ly && ly !== "[Instrumental]" ? ly
-      : s.status === "generating" ? "生成中,歌词稍后可见…" : "纯音乐 · 无歌词";
+      : s.status === "generating" ? "生成中,歌词稍后可见…" : "纯音乐 · 没有歌词";
     $("om-lyrics").hidden = false;
   }
   const closeLyrics = () => { $("om-lyrics").hidden = true; };
@@ -221,7 +228,7 @@
     audio.src = mediaURL(id, "mp3");
     audio.play().catch(() => {});
     $("om-player").classList.remove("idle");
-    $("om-now-title").textContent = s.title || "Untitled";
+    $("om-now-title").textContent = s.title || "未命名";
     $("om-now-style").textContent = s.style || s.tags || "";
     setNowCover(s.hasCover ? mediaURL(id, "jpg") : "");
     renderList();

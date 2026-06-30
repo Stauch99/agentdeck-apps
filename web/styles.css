@@ -50,6 +50,12 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
 .om-seg-mini{display:flex;gap:6px}
 .om-seg-mini button{padding:7px 15px;border-radius:9px;font-size:12.5px;color:var(--dim);background:var(--bg-2);transition:.18s}
 .om-seg-mini button.on{background:var(--accent);color:#fff}
+.om-chips{display:flex;flex-wrap:wrap;gap:8px}
+.om-chip{padding:8px 15px;border-radius:999px;font-size:13px;color:var(--dim);background:var(--bg-2);
+  border:1px solid transparent;transition:.16s}
+.om-chip:hover{color:var(--text)}
+.om-chip.on{background:oklch(70% 0.18 25 / .16);border-color:var(--accent);color:var(--text)}
+.om-wiz-hint{font-size:12px;color:var(--faint);line-height:1.6;margin-top:4px}
 .om-slider{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:var(--bg-2);outline:none}
 .om-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
   background:var(--accent);cursor:pointer;box-shadow:0 0 0 3px oklch(70% 0.18 25 / .25)}
