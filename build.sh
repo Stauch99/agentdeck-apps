@@ -13,9 +13,11 @@ PLATFORM=()
 ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --amd64) PLATFORM=(--platform linux/amd64); shift ;;
-    --repo)  ARGS+=(--build-arg "OPENART_REPO=$2"); shift 2 ;;
-    --sha)   ARGS+=(--build-arg "OPENART_SHA=$2");  shift 2 ;;
+    --amd64)        PLATFORM=(--platform linux/amd64); shift ;;
+    --repo)         ARGS+=(--build-arg "OPENART_REPO=$2"); shift 2 ;;
+    --sha)          ARGS+=(--build-arg "OPENART_SHA=$2");  shift 2 ;;
+    --npm-registry) ARGS+=(--build-arg "NPM_REGISTRY=$2"); shift 2 ;;  # 受限网络切镜像源 (如 https://registry.npmmirror.com)
+    --pip-index)    ARGS+=(--build-arg "PIP_INDEX=$2");    shift 2 ;;  # 受限网络切 pip 源 (如 https://pypi.tuna.tsinghua.edu.cn/simple)
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done

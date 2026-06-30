@@ -27,16 +27,38 @@ RUN sed -i 's#const BASE_URL = "http://127.0.0.1:8000";#const BASE_URL = "";#' c
 # deck 自身 :8080)。与 OpenMusic cacheMedia 的私网防护对齐: 注入 host allowlist (仅 muapi + S3), grep fail-loud。
 RUN sed -i 's#            response = await client.post(target_url, files=fields, timeout=120.0)#            from urllib.parse import urlparse as _up\n            _h = (_up(target_url).hostname or "").lower()\n            if not (_h == "api.muapi.ai" or _h.endswith(".muapi.ai") or _h.endswith(".amazonaws.com")):\n                raise HTTPException(status_code=400, detail="upload target host not allowed")\n            response = await client.post(target_url, files=fields, timeout=120.0)#' server/app/utils/muapi_helper.py \
  && grep -q "upload target host not allowed" server/app/utils/muapi_helper.py
+# 补丁 (离线构建): layout.js 用 next/font/google 的 Inter, next build 会构建期拉 Google Fonts ->
+# GMT+8/无公网下 "SocketError: other side closed" 必断。去掉该依赖, 退回系统字体栈 (视觉影响极小)。grep fail-loud。
+RUN sed -i \
+      -e '/import { Inter } from "next\/font\/google";/d' \
+      -e 's#const inter = Inter({ subsets: \["latin"\] });#const inter = { className: "" };#' \
+      client/app/layout.js \
+ && grep -q 'const inter = { className: "" };' client/app/layout.js \
+ && ! grep -q 'next/font/google' client/app/layout.js
 
 # ---- deps: 根 workspace 装 node 依赖 (复刻上游 client/Dockerfile; server 非 node 包, 不参与) ----
 FROM node:24-bookworm-slim AS deps
+# 默认 vanilla npmjs.org (全局可移植); 受限网络 (如 GMT+8 Colima) 经 build-arg 切镜像源, 见 build.sh --npm-registry
+ARG NPM_REGISTRY=https://registry.npmjs.org
 WORKDIR /app
+# 持久化 registry + 重试到 /root/.npmrc —— 关键: next build 会自下载 @next/swc 原生包, 它读 .npmrc 而非 CLI flag,
+# 不写 .npmrc 则 swc 仍走 npmjs.org (经代理 IP 大文件易断)。builder FROM deps 继承此 .npmrc。
+RUN npm config set registry "$NPM_REGISTRY" \
+ && npm config set fetch-retries 5 \
+ && npm config set fetch-retry-mintimeout 20000 \
+ && npm config set fetch-retry-maxtimeout 120000 \
+ && npm config set fetch-timeout 600000
 COPY --from=src /src/package.json /src/package-lock.json ./
 COPY --from=src /src/client/package.json ./client/
 COPY --from=src /src/packages/design-agent/package.json ./packages/design-agent/
-# 重试 + 长超时: Colima→registry.npmjs.org 偶发 EIDLETIMEOUT (网络空闲超时), 让 npm 自愈而非整构失败
-RUN npm ci --include=dev \
-      --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=600000
+# 删 lock + npm install: 基于 lockfileVersion 3 的 lock 解析 optional 原生包 (lightningcss/oxide/@next/swc
+# 平台二进制) 有时静默漏装 (npm 老 bug, 时灵时不灵) -> 构建期暴 "Cannot find module .node"。删 lock 让
+# npm install 按当前构建平台 (arm64/amd64) 重新解析, 可靠装齐平台 optional。node 端可复现性以镜像 (docker save)
+# 固化, 而非 node lock —— 与 server/requirements.lock 的 python 钉版互补。
+# 装毕用 require() 验关键原生包真在位 (fail-loud, 早于 next build 暴问题)。
+RUN rm -f package-lock.json \
+ && npm install --include=dev --include=optional --no-audit --no-fund \
+ && ( cd client && node -e "require('lightningcss'); require('@tailwindcss/oxide')" )
 
 # ---- build-lib: 共享设计包 ----
 FROM deps AS builder-lib
@@ -45,6 +67,7 @@ RUN npm run build -w packages/design-agent
 
 # ---- build-client: next build -> standalone (源已含补丁) ----
 FROM deps AS builder
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder-lib /app/packages/design-agent/dist ./packages/design-agent/dist
 COPY --from=src /src/client ./client
 WORKDIR /app/client
@@ -52,14 +75,18 @@ RUN npm run build
 
 # ---- runtime: node + python venv + tini (单镜像双进程) ----
 FROM node:24-bookworm-slim AS runtime
+# 默认 vanilla PyPI (全局可移植); 受限网络 (GMT+8 Colima) 经 build-arg 切 pip 镜像源, 见 build.sh --pip-index
+ARG PIP_INDEX=https://pypi.org/simple
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv tini ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
-# python 依赖: venv 在 runtime 自身的 python3 上创建 -> 解释器 symlink 有效 (避免跨阶段 venv 悬空坑)
-COPY --from=src /src/server/requirements.txt /tmp/requirements.txt
+# python 依赖: venv 在 runtime 自身的 python3 上创建 -> 解释器 symlink 有效 (避免跨阶段 venv 悬空坑)。
+# 用本仓库 vendored requirements.lock (== 全量钉版, 含传递依赖; 由首个成功镜像 pip freeze 固化) 而非上游松散
+# requirements.txt —— 持 MU_API_KEY 的进程不应随 PyPI 当下解析漂移; 与上游 SHA-pin 姿态端到端一致。
+COPY requirements.lock /tmp/requirements.txt
 RUN python3 -m venv /opt/venv \
- && /opt/venv/bin/pip install --no-cache-dir --retries 5 --timeout 120 -r /tmp/requirements.txt
+ && /opt/venv/bin/pip install --no-cache-dir --index-url "$PIP_INDEX" --retries 5 --timeout 120 -r /tmp/requirements.txt
 
 # next standalone (monorepo 输出嵌套于 client/)
 COPY --from=builder /app/client/.next/standalone ./

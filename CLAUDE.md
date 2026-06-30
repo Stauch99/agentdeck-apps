@@ -8,7 +8,8 @@ muapi.ai 设计 agent(海报/品牌/视频),AgentDeck 卡带。**合体单镜像
 
 ## 成员清单
 Dockerfile: 多阶段合体镜像。src(钉 SHA git clone + sed 补丁 ApiContext.js 的 BASE_URL,grep fail-loud)→ deps(npm ci,复刻上游 client/Dockerfile)→ builder-lib(packages/design-agent)→ builder(next build → standalone)→ runtime(node:24-bookworm-slim + python venv + tini -g;uvicorn 后台 + next 前台,wait -n 任一退即整体退)。镜像 `agentdeck/openart:latest`,容器端口 3000
-build.sh: 本地构建助手。默认按宿主架构;`--amd64`(CentOS 目标)、`--repo`(离线切 gh-proxy)、`--sha`(覆盖钉死版本)
+build.sh: 本地构建助手。默认按宿主架构;`--amd64`(CentOS 目标)、`--repo`(离线切 gh-proxy)、`--sha`(覆盖钉死版本)、`--npm-registry`(受限网络切 npm 镜像源,如 npmmirror)
+requirements.lock: vendored python 钉版锁(== 全量,含传递依赖;由首个成功镜像 `pip freeze` 固化)。Dockerfile COPY 它替代上游松散 requirements.txt —— 持 MU_API_KEY 的进程不随 PyPI 漂移,与 SHA-pin 端到端一致
 
 ## 拓扑要点(为什么合体而非 sidecar)
 两进程被上游**硬绑 localhost**:`client/next.config.mjs` 把 `/api/*` rewrite 写死转发 `127.0.0.1:8000`(连 compose 的 `API_URL` build-arg 都是死代码)。server 无状态不需隔离。→ 合体单容器零改 `next.config` 天然满足耦合。
