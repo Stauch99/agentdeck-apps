@@ -8,60 +8,9 @@
 </head>
 <body>
 <div class="om-app">
-  <!-- LEFT: creation console -->
+  <!-- LEFT: step-by-step creation wizard (rendered by app.js into #om-wiz) -->
   <aside class="om-left">
-    <div class="om-modes">
-      <button data-mode="simple" class="om-seg">Simple</button>
-      <button data-mode="advanced" class="om-seg on">Advanced</button>
-      <select id="om-model" class="om-model">
-        <option value="V4_5ALL" selected>v4.5-all</option>
-        <option value="V5_5">v5.5</option>
-        <option value="V4_5PLUS">v4.5-plus</option>
-        <option value="V4_5">v4.5</option>
-        <option value="V4">v4</option>
-        <option value="V3_5">v3.5</option>
-      </select>
-    </div>
-
-    <section class="om-group">
-      <header class="om-group-h"><span>Lyrics</span>
-        <div class="om-lyric-modes">
-          <button data-lyric="write" class="om-chip on">Write</button>
-          <button data-lyric="prompt" class="om-chip">Prompt</button>
-          <button data-lyric="instrumental" class="om-chip">Instrumental</button>
-        </div>
-      </header>
-      <textarea id="om-prompt" class="om-text" rows="6" placeholder="Write your lyrics, or describe the song…"></textarea>
-    </section>
-
-    <section class="om-group">
-      <header class="om-group-h"><span>Styles</span></header>
-      <textarea id="om-style" class="om-text" rows="3" placeholder="e.g. melody-first R&B, warm Rhodes, 78 BPM trap-soul"></textarea>
-      <input id="om-negative" class="om-input" placeholder="Exclude styles (optional)" />
-    </section>
-
-    <section class="om-group om-more">
-      <header class="om-group-h"><span>More Options</span></header>
-      <div class="om-row">
-        <label>Vocal Gender</label>
-        <div class="om-seg-mini">
-          <button data-vocal="" class="on">Auto</button>
-          <button data-vocal="m">Male</button>
-          <button data-vocal="f">Female</button>
-        </div>
-      </div>
-      <div class="om-row om-slider-row">
-        <label>Weirdness <b id="om-weird-v">50%</b></label>
-        <input id="om-weird" type="range" min="0" max="100" value="50" class="om-slider" />
-      </div>
-      <div class="om-row om-slider-row">
-        <label>Style Influence <b id="om-style-v">50%</b></label>
-        <input id="om-styleinf" type="range" min="0" max="100" value="50" class="om-slider" />
-      </div>
-    </section>
-
-    <input id="om-title" class="om-input" placeholder="Song Title (optional)" />
-    <button id="om-create" class="om-create">Create</button>
+    <div class="om-wiz" id="om-wiz"></div>
   </aside>
 
   <!-- MAIN: workspace song list -->
