@@ -91,7 +91,8 @@ func (l *Library) Materialize(taskID string, idx int, t Track) (Song, error) {
 	for i := range l.songs {
 		if l.songs[i].TaskID == taskID && l.songs[i].Idx == idx {
 			l.songs[i].ID = t.ID
-			if t.Title != "" {
+			// Preserve the user's chosen name; only borrow kie's generated title when they left it blank.
+			if l.songs[i].Title == "" && t.Title != "" {
 				l.songs[i].Title = t.Title
 			}
 			l.songs[i].Tags = t.Tags

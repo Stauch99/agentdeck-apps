@@ -28,8 +28,9 @@ func TestLibraryLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
-	if got.ID != "aud0" || got.Title != "Real Title" || got.Tags != "lofi,chill" || got.Duration != 123 {
-		t.Fatalf("materialize did not map track: %+v", got)
+	// the user named it "My Song" (set in AddPlaceholders) — kie's generated title must NOT clobber it
+	if got.ID != "aud0" || got.Title != "My Song" || got.Tags != "lofi,chill" || got.Duration != 123 {
+		t.Fatalf("materialize did not map track / preserve title: %+v", got)
 	}
 	if got.Lyrics != "[Verse]\nsunlight on the floor" {
 		t.Fatalf("lyrics not captured from track.prompt: %q", got.Lyrics)
@@ -83,6 +84,20 @@ func TestLibraryLifecycle(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "media", "aud0.mp3")); !os.IsNotExist(err) {
 		t.Fatalf("Delete left media file")
+	}
+}
+
+func TestMaterializeTitlePreservesUserName(t *testing.T) {
+	lib, _ := NewLibrary(t.TempDir())
+	// user named it -> preserved even if kie returns a different title
+	lib.AddPlaceholders("t1", "V4", "", "我的歌名", 1)
+	if g, _ := lib.Materialize("t1", 0, Track{ID: "a1", Title: "kie generated"}); g.Title != "我的歌名" {
+		t.Fatalf("user title not preserved: %q", g.Title)
+	}
+	// user left it blank -> borrow kie's generated title
+	lib.AddPlaceholders("t2", "V4", "", "", 1)
+	if g, _ := lib.Materialize("t2", 0, Track{ID: "a2", Title: "kie generated"}); g.Title != "kie generated" {
+		t.Fatalf("blank title should take kie's: %q", g.Title)
 	}
 }
 

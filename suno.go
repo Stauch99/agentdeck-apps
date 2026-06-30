@@ -140,8 +140,26 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*envelo
 }
 
 func (c *Client) Generate(ctx context.Context, r GenerateRequest) (string, error) {
+	// kie's simple mode (customMode=false) reads ONLY `prompt` — it ignores the style/vocalGender fields
+	// outright. Fold those choices into the prompt text so the user's picks actually take effect; in custom
+	// mode the structured fields are honored, so we leave the prompt untouched there.
+	prompt := r.Prompt
+	if !r.CustomMode {
+		extra := []string{}
+		if s := strings.TrimSpace(r.Style); s != "" {
+			extra = append(extra, s)
+		}
+		if r.VocalGender == "f" {
+			extra = append(extra, "female vocals")
+		} else if r.VocalGender == "m" {
+			extra = append(extra, "male vocals")
+		}
+		if len(extra) > 0 {
+			prompt = strings.TrimSpace(prompt) + ", " + strings.Join(extra, ", ")
+		}
+	}
 	env, err := c.do(ctx, http.MethodPost, "/api/v1/generate", kieGenBody{
-		Prompt: r.Prompt, CustomMode: r.CustomMode, Instrumental: r.Instrumental,
+		Prompt: prompt, CustomMode: r.CustomMode, Instrumental: r.Instrumental,
 		Model: r.Model, CallBackUrl: c.callbackURL, Style: r.Style, Title: r.Title, NegativeTags: r.NegativeTags,
 		VocalGender: r.VocalGender, StyleWeight: r.StyleWeight, WeirdnessConstraint: r.WeirdnessConstraint,
 	})

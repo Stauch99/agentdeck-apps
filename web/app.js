@@ -116,7 +116,7 @@
   async function submitWiz() {
     const instrumental = wiz.mode === "instrumental";
     let title = wiz.title.trim();
-    if (!title) { // never leave it blank — kie needs a title when we write lyrics / go instrumental
+    if (!title && wizCustom()) { // custom mode (write/instrumental) needs a title; AI-write lets kie name it if blank
       const firstLine = (wiz.prompt || "").split("\n").map((s) => s.trim()).find((s) => s && !s.startsWith("["));
       title = (firstLine || "我的作品").slice(0, 24);
     }

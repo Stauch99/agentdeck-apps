@@ -45,6 +45,27 @@ func TestGenerateParsesTaskID(t *testing.T) {
 	}
 }
 
+func TestGenerateFoldsStyleVocalIntoPromptInSimpleMode(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		json.Unmarshal(b, &body)
+		w.Write([]byte(`{"code":200,"msg":"ok","data":{"taskId":"T"}}`))
+	}))
+	defer srv.Close()
+	c := NewClient(srv.URL, "k")
+	// simple mode: kie ignores style/vocalGender, so they must be folded into the prompt to take effect
+	c.Generate(context.Background(), GenerateRequest{CustomMode: false, Model: "V4", Prompt: "a song about cats", Style: "romantic ballad", VocalGender: "f"})
+	if p, _ := body["prompt"].(string); !strings.Contains(p, "romantic ballad") || !strings.Contains(p, "female vocals") {
+		t.Fatalf("simple-mode prompt should fold style+vocal, got %q", p)
+	}
+	// custom mode: structured fields are honored, so the prompt (=lyrics) is left untouched
+	c.Generate(context.Background(), GenerateRequest{CustomMode: true, Model: "V4", Prompt: "my lyrics", Style: "pop", Title: "x", VocalGender: "m"})
+	if p, _ := body["prompt"].(string); p != "my lyrics" {
+		t.Fatalf("custom-mode prompt should be untouched, got %q", p)
+	}
+}
+
 func TestGenerateAPIErrorIsReported(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"code":401,"msg":"unauthorized","data":null}`))
