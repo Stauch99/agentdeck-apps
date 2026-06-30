@@ -21,5 +21,6 @@ while [ $# -gt 0 ]; do
 done
 
 echo "building $TAG ${PLATFORM[*]:-} ${ARGS[*]:-}"
-docker build "${PLATFORM[@]}" "${ARGS[@]}" -t "$TAG" .
+# ${arr[@]+"${arr[@]}"} 在空数组下安全展开为空 (兼容 bash 3.2 的 set -u, 否则报 unbound)
+docker build ${PLATFORM[@]+"${PLATFORM[@]}"} ${ARGS[@]+"${ARGS[@]}"} -t "$TAG" .
 echo "done: $TAG"

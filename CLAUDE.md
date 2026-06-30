@@ -25,6 +25,9 @@ build.sh: 本地构建助手。默认按宿主架构;`--amd64`(CentOS 目标)、
 - `scripts/deploy.conf` 一行 `openart openart agentdeck/openart:latest`
 - `MU_API_KEY` 经 `secrets.env`(EnvironmentFile)注入,不入源码/日志/git
 
-Law: 不 vendor 上游 · 钉死 SHA · 密钥进 env · 无状态无卷 · 补丁 fail-loud
+## 安全注记
+上游 `/api/v1/upload-binary` 的 `x-proxy-target-url` 客户端可控 (拿来直传 S3 预签名 URL),`proxy_s3_upload` 原无 host 校验 → 经反代成「服务端任意 URL POST」原语 (可达 host loopback / sidecar `host.docker.internal:<port>` / deck `:8080`)。Dockerfile src 阶段已注入 host allowlist 补丁 (仅 `api.muapi.ai` / `*.muapi.ai` / `*.amazonaws.com`,grep fail-loud),与 OpenMusic `cacheMedia` 私网防护对齐。注: 该 key 不经此路径外泄 (upload 不附 `x-api-key`)。纵深防御层面,容器 egress 理想上仅需达 muapi + S3。
+
+Law: 不 vendor 上游 · 钉死 SHA · 密钥进 env · 无状态无卷 · 补丁 fail-loud · SSRF host allowlist
 
 [PROTOCOL]: 变更时更新本头,再核对 ../docs/agentdeck 与设计稿,保持代码与文档同构。

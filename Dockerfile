@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # ============================================================================
 #  OpenArt —— AgentDeck 合体卡带镜像
 #  Next.js 16 standalone (web :3000) + FastAPI 透传代理 (uvicorn :8000)
@@ -23,6 +22,11 @@ RUN git clone "$OPENART_REPO" . && git checkout "$OPENART_SHA"
 # grep 校验补丁命中, 未命中 (上游改了这行) 即构建失败 fail-loud, 不静默出坏镜像。
 RUN sed -i 's#const BASE_URL = "http://127.0.0.1:8000";#const BASE_URL = "";#' client/context/ApiContext.js \
  && grep -q 'const BASE_URL = "";' client/context/ApiContext.js
+# 补丁 (SSRF 收口): /api/v1/upload-binary 的 x-proxy-target-url 客户端可控, 上游 proxy_s3_upload 对它无 host 校验
+# -> 经 AgentDeck 反代成为「服务端任意 URL POST」原语 (可达 host loopback / sidecar host.docker.internal:<port> /
+# deck 自身 :8080)。与 OpenMusic cacheMedia 的私网防护对齐: 注入 host allowlist (仅 muapi + S3), grep fail-loud。
+RUN sed -i 's#            response = await client.post(target_url, files=fields, timeout=120.0)#            from urllib.parse import urlparse as _up\n            _h = (_up(target_url).hostname or "").lower()\n            if not (_h == "api.muapi.ai" or _h.endswith(".muapi.ai") or _h.endswith(".amazonaws.com")):\n                raise HTTPException(status_code=400, detail="upload target host not allowed")\n            response = await client.post(target_url, files=fields, timeout=120.0)#' server/app/utils/muapi_helper.py \
+ && grep -q "upload target host not allowed" server/app/utils/muapi_helper.py
 
 # ---- deps: 根 workspace 装 node 依赖 (复刻上游 client/Dockerfile; server 非 node 包, 不参与) ----
 FROM node:24-bookworm-slim AS deps
@@ -30,7 +34,9 @@ WORKDIR /app
 COPY --from=src /src/package.json /src/package-lock.json ./
 COPY --from=src /src/client/package.json ./client/
 COPY --from=src /src/packages/design-agent/package.json ./packages/design-agent/
-RUN npm ci --include=dev
+# 重试 + 长超时: Colima→registry.npmjs.org 偶发 EIDLETIMEOUT (网络空闲超时), 让 npm 自愈而非整构失败
+RUN npm ci --include=dev \
+      --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=600000
 
 # ---- build-lib: 共享设计包 ----
 FROM deps AS builder-lib
@@ -52,7 +58,8 @@ WORKDIR /app
 
 # python 依赖: venv 在 runtime 自身的 python3 上创建 -> 解释器 symlink 有效 (避免跨阶段 venv 悬空坑)
 COPY --from=src /src/server/requirements.txt /tmp/requirements.txt
-RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
+RUN python3 -m venv /opt/venv \
+ && /opt/venv/bin/pip install --no-cache-dir --retries 5 --timeout 120 -r /tmp/requirements.txt
 
 # next standalone (monorepo 输出嵌套于 client/)
 COPY --from=builder /app/client/.next/standalone ./
