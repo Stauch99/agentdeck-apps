@@ -9,5 +9,12 @@
   "env": { "MU_API_KEY": "${MU_API_KEY}", "API_SUFFIX": "https://api.muapi.ai" },
   "persistent": true,
   "secrets": ["MU_API_KEY"],
-  "llm": { "gateway": false, "upstream": "muapi", "billing": "credits" }
+  "llm": { "gateway": false, "upstream": "muapi", "billing": "credits" },
+  "meta": {
+    "tagline": "海报 · 品牌 · 短片设计 agent",
+    "description": "muapi.ai 驱动的设计 agent:对话生成海报、品牌视觉与短视频,产物进文件库。",
+    "category": "设计",
+    "version": "1.0.0",
+    "developer": "AgentDeck 官方"
+  }
 }

@@ -51,3 +51,21 @@ jobs:
           img="ghcr.io/${owner}/${slug}"
           podman build -t "$img:$sha" -t "$img:latest" "apps/$slug"
           podman push "$img:$sha"; podman push "$img:latest"
+  index:
+    needs: build
+    if: always()   # 即便无镜像改动 (meta-only) 也刷新货架
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pages: write, id-token: write }
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 聚合 index.json
+        run: |
+          mkdir -p _site
+          bash scripts/index.sh "$PWD/_site/index.json"
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: deploy
+        uses: actions/deploy-pages@v4
