@@ -55,17 +55,18 @@ jobs:
     needs: build
     if: always()   # 即便无镜像改动 (meta-only) 也刷新货架
     runs-on: ubuntu-latest
-    permissions: { contents: read, pages: write, id-token: write }
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    permissions: { contents: write }   # 推 store-index 发布分支 (私有仓走 raw + PAT, 免 Pages 公开)
     steps:
       - uses: actions/checkout@v4
-      - name: 聚合 index.json
+      - name: 聚合 + 推 store-index 孤儿分支
         run: |
-          mkdir -p _site
-          bash scripts/index.sh "$PWD/_site/index.json"
-      - uses: actions/upload-pages-artifact@v3
-        with: { path: _site }
-      - id: deploy
-        uses: actions/deploy-pages@v4
+          bash scripts/index.sh "$RUNNER_TEMP/index.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 孤儿 commit: 只含 index.json, 无历史包袱 (commit-tree 无 -p = 无 parent);
+          # 不切分支/不碰工作区, push -f 使 store-index 恒为单 commit 最新货架。
+          blob=$(git hash-object -w "$RUNNER_TEMP/index.json")
+          tree=$(printf '100644 blob %s\tindex.json\n' "$blob" | git mktree)
+          commit=$(git commit-tree "$tree" -m "chore(store): 货架索引 ${GITHUB_SHA::12} [skip ci]")
+          git update-ref refs/heads/store-index "$commit"
+          git push -f origin store-index
