@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "name": "OpenArt",
   "slug": "openart",
-  "image": "ghcr.io/GHCR_ORG/openart:latest",
+  "image": "ghcr.io/Stauch99/openart:latest",
   "port": 3000,
   "glyph": "openart",
   "color": "oklch(62% 0.20 277)",

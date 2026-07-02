@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "name": "TODO-DisplayName",
   "slug": "TODO-slug",
-  "image": "ghcr.io/GHCR_ORG/TODO-slug:latest",
+  "image": "ghcr.io/Stauch99/TODO-slug:latest",
   "port": 8080,
   "glyph": "TODO-slug",
   "color": "oklch(70% 0.15 250)",
