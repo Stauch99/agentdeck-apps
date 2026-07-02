@@ -1,5 +1,5 @@
-# openmusic/
-> L2 | Parent: ../CLAUDE.md · 关联规格 ../docs/agentdeck/SPEC.md
+# apps/openmusic/
+> L2 | Parent: ../../CLAUDE.md · manifest 字段对账平台 BoxAssistant/server/storage.go
 
 AI 音乐生成应用,AgentDeck 卡带。纯 stdlib-Go 后端代理 kie.ai SunoAPI,embed 前端,曲库落卷。
 

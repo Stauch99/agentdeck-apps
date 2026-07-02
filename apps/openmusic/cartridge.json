@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "name": "OpenMusic",
+  "slug": "openmusic",
+  "image": "ghcr.io/GHCR_ORG/openmusic:latest",
+  "port": 8080,
+  "glyph": "openmusic",
+  "color": "oklch(70% 0.18 25)",
+  "env": { "KIE_API_KEY": "${KIE_API_KEY}", "OPENMUSIC_DATA_DIR": "/data" },
+  "volumes": [ { "name": "home", "path": "/data", "layer": "state" } ],
+  "persistent": true,
+  "secrets": ["KIE_API_KEY"],
+  "llm": { "gateway": false, "upstream": "kie", "billing": "credits" },
+  "notify": { "mode": "poll", "endpoint": "/api/songs", "field": "status" },
+  "artifacts": { "volume": "home", "dir": "media", "endpoint": "/api/artifacts", "exts": ["mp3", "jpg", "jpeg", "png"] }
+}
