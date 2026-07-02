@@ -12,5 +12,12 @@
   "secrets": ["KIE_API_KEY"],
   "llm": { "gateway": false, "upstream": "kie", "billing": "credits" },
   "notify": { "mode": "poll", "endpoint": "/api/songs", "field": "status" },
-  "artifacts": { "volume": "home", "dir": "media", "endpoint": "/api/artifacts", "exts": ["mp3", "jpg", "jpeg", "png"] }
+  "artifacts": { "volume": "home", "dir": "media", "endpoint": "/api/artifacts", "exts": ["mp3", "jpg", "jpeg", "png"] },
+  "meta": {
+    "tagline": "一句话生成整首歌 + 封面",
+    "description": "Suno 风 AI 音乐生成:输入描述,产出成品 mp3 与封面图,自动进文件库,可经微信直达。",
+    "category": "创作",
+    "version": "1.0.0",
+    "developer": "AgentDeck 官方"
+  }
 }

@@ -7,5 +7,13 @@
   "glyph": "TODO-slug",
   "color": "oklch(70% 0.15 250)",
   "persistent": true,
-  "secrets": []
+  "secrets": [],
+  "meta": {
+    "tagline": "TODO 一句话卖点",
+    "description": "TODO 详情页正文",
+    "category": "工具",
+    "version": "0.1.0",
+    "developer": "TODO",
+    "icon": "icon.svg"
+  }
 }
