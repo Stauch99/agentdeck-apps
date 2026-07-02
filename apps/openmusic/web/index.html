@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenMusic</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="om-app">
+  <!-- LEFT: step-by-step creation wizard (rendered by app.js into #om-wiz) -->
+  <aside class="om-left">
+    <div class="om-wiz" id="om-wiz"></div>
+  </aside>
+
+  <!-- MAIN: workspace song list -->
+  <main class="om-main">
+    <header class="om-main-h"><h1>My Workspace</h1></header>
+    <div id="om-list" class="om-list"></div>
+    <div id="om-empty" class="om-empty">No songs yet — describe one and hit Create.</div>
+  </main>
+</div>
+
+<!-- LYRICS modal -->
+<div class="om-modal" id="om-lyrics" hidden>
+  <div class="om-modal-card">
+    <button class="om-modal-x" id="om-lyrics-x" aria-label="Close">✕</button>
+    <h2 class="om-modal-title" id="om-lyrics-title"></h2>
+    <div class="om-modal-sub" id="om-lyrics-style"></div>
+    <pre class="om-lyrics-body" id="om-lyrics-body"></pre>
+  </div>
+</div>
+
+<!-- BOTTOM: player (always visible) -->
+<footer class="om-player" id="om-player">
+  <div class="om-now">
+    <div class="om-now-cover" id="om-now-cover">♪</div>
+    <div class="om-now-meta"><b id="om-now-title">—</b><span id="om-now-style"></span></div>
+  </div>
+  <div class="om-controls">
+    <button id="om-prev" class="om-pbtn">⏮</button>
+    <button id="om-play" class="om-pbtn om-play">▶</button>
+    <button id="om-next" class="om-pbtn">⏭</button>
+  </div>
+  <div class="om-seek">
+    <span id="om-cur">0:00</span>
+    <input id="om-bar" type="range" min="0" max="100" value="0" class="om-slider" />
+    <span id="om-dur">0:00</span>
+  </div>
+  <audio id="om-audio"></audio>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

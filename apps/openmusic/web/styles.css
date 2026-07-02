@@ -1,0 +1,146 @@
+/* OpenMusic — Suno-style dark workstation. oklch tokens echo AgentDeck's palette
+   so the app reads as native inside the AgentDeck iframe. */
+:root{
+  --bg-0:oklch(14% 0.012 285); --bg-1:oklch(18% 0.014 285); --bg-2:oklch(22% 0.016 285);
+  --text:oklch(96% 0.005 285); --dim:oklch(72% 0.015 285); --faint:oklch(56% 0.015 285);
+  --line:oklch(100% 0 0 / 0.10); --line-2:oklch(100% 0 0 / 0.16);
+  --accent:oklch(70% 0.18 25); --accent-2:oklch(72% 0.16 350);
+  --ok:oklch(76% 0.17 158); --ease:cubic-bezier(0.16,1,0.3,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  color:var(--text);background:var(--bg-0);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+
+.om-app{display:grid;grid-template-columns:360px 1fr;height:100%;padding-bottom:84px}
+
+/* ---- LEFT step wizard ---- */
+.om-left{height:100%;overflow:hidden;border-right:.5px solid var(--line);
+  background:linear-gradient(180deg,var(--bg-1),var(--bg-0))}
+.om-wiz{height:100%;display:flex;flex-direction:column;padding:18px 16px;gap:14px}
+.om-wiz-head{display:flex;align-items:center;justify-content:space-between}
+.om-wiz-step{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.om-dots{display:flex;gap:6px}
+.om-dots b{width:7px;height:7px;border-radius:50%;background:var(--bg-2);transition:background .2s}
+.om-dots b.on{background:var(--accent)}
+.om-dots b.done{background:oklch(70% 0.18 25 / .45)}
+.om-wiz-body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:11px}
+.om-wiz-q{font-size:16px;font-weight:600;line-height:1.4}
+.om-opt{font-size:12px;font-weight:400;color:var(--faint)}
+.om-wiz-sub{font-size:12px;color:var(--faint);margin-top:4px;display:flex;justify-content:space-between}
+.om-wiz-sub b{color:var(--text);font-weight:600}
+
+.om-choices{display:flex;flex-direction:column;gap:10px;margin-top:2px}
+.om-choice{display:flex;align-items:center;gap:13px;padding:15px 14px;border-radius:14px;text-align:left;
+  background:var(--bg-2);border:1.5px solid transparent;transition:border-color .18s,background .18s,transform .12s}
+.om-choice:hover{background:oklch(26% 0.018 285);transform:translateY(-1px)}
+.om-choice.on{border-color:var(--accent);background:oklch(70% 0.18 25 / .1)}
+.om-choice-ic{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;font-size:19px;
+  background:var(--bg-0);color:var(--accent)}
+.om-choice.on .om-choice-ic{background:var(--accent);color:#fff}
+.om-choice-tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.om-choice-tx b{font-size:14px;font-weight:500}
+.om-choice-tx i{font-size:12px;color:var(--faint);font-style:normal}
+
+.om-text,.om-input{width:100%;background:var(--bg-2);border:.5px solid var(--line);border-radius:12px;
+  color:var(--text);font:inherit;font-size:13.5px;padding:12px 13px;resize:vertical;outline:none;transition:border-color .18s}
+.om-text:focus,.om-input:focus{border-color:var(--accent)}
+.om-text.om-grow{flex:1;min-height:170px;resize:none}
+.om-seg-mini{display:flex;gap:6px}
+.om-seg-mini button{padding:7px 15px;border-radius:9px;font-size:12.5px;color:var(--dim);background:var(--bg-2);transition:.18s}
+.om-seg-mini button.on{background:var(--accent);color:#fff}
+.om-chips{display:flex;flex-wrap:wrap;gap:8px}
+.om-chip{padding:8px 15px;border-radius:999px;font-size:13px;color:var(--dim);background:var(--bg-2);
+  border:1px solid transparent;transition:.16s}
+.om-chip:hover{color:var(--text)}
+.om-chip.on{background:oklch(70% 0.18 25 / .16);border-color:var(--accent);color:var(--text)}
+.om-wiz-hint{font-size:12px;color:var(--faint);line-height:1.6;margin-top:4px}
+.om-slider{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:var(--bg-2);outline:none}
+.om-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--accent);cursor:pointer;box-shadow:0 0 0 3px oklch(70% 0.18 25 / .25)}
+
+.om-wiz-foot{display:flex;align-items:center;gap:10px;padding-top:2px}
+.om-wiz-back{font-size:13px;color:var(--dim);padding:8px 4px;transition:color .18s}
+.om-wiz-back:hover{color:var(--text)}
+.om-wiz-next{margin-left:auto;padding:11px 22px;border-radius:12px;font-size:14px;font-weight:600;color:#fff;
+  background:linear-gradient(160deg,var(--accent),var(--accent-2));box-shadow:0 8px 22px oklch(70% 0.18 25 / .3);
+  transition:transform .18s var(--ease),filter .18s}
+.om-wiz-next:hover{transform:translateY(-1px);filter:brightness(1.06)}
+.om-wiz-next:disabled{opacity:.4;cursor:not-allowed;transform:none;filter:grayscale(.3);box-shadow:none}
+
+/* ---- MAIN list ---- */
+.om-main{height:100%;overflow-y:auto;padding:22px 26px}
+.om-main-h h1{font-size:18px;font-weight:600;margin-bottom:18px}
+.om-list{display:flex;flex-direction:column;gap:10px}
+.om-card{display:flex;align-items:center;gap:14px;padding:12px;border-radius:14px;
+  background:var(--bg-1);border:.5px solid var(--line);transition:background .18s,border-color .18s}
+.om-card:hover{background:var(--bg-2);border-color:var(--line-2)}
+.om-cover{width:56px;height:56px;border-radius:10px;flex:none;overflow:hidden;color:var(--faint);
+  background:linear-gradient(160deg,var(--bg-2),var(--bg-0));display:grid;place-items:center}
+.om-cover img{width:100%;height:100%;object-fit:cover;display:block} /* constrain real Suno covers to the 56px box */
+.om-card-body{flex:1;min-width:0;cursor:pointer}
+.om-card-title{font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.om-card-sub{font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.om-card-badge{font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--bg-2);color:var(--dim)}
+.om-card.generating .om-cover{animation:om-pulse 1.6s var(--ease) infinite}
+.om-card.error .om-card-sub{color:var(--accent)}
+.om-card.playing{border-color:var(--accent);background:oklch(70% 0.18 25 / .08)}
+.om-card-play{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.om-card-del{width:28px;height:28px;border-radius:50%;color:var(--faint);background:transparent;flex:none;font-size:13px;opacity:0;transition:opacity .18s,color .18s,background .18s}
+.om-card:hover .om-card-del{opacity:1}
+.om-card-del:hover{color:#fff;background:oklch(58% 0.2 25)}
+@keyframes om-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.om-empty{color:var(--faint);font-size:13.5px;text-align:center;padding:60px 0}
+.om-list:not(:empty)+.om-empty{display:none}
+
+/* ---- PLAYER ---- */
+.om-player[hidden]{display:none} /* beat the author display:grid so the empty state hides the bar */
+.om-player{position:fixed;left:0;right:0;bottom:0;height:84px;z-index:30;display:grid;
+  grid-template-columns:280px 1fr 360px;align-items:center;gap:20px;padding:0 24px;
+  background:oklch(12% 0.012 285 / .9);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);
+  border-top:.5px solid var(--line)}
+.om-now{display:flex;align-items:center;gap:12px;min-width:0}
+.om-now-cover{width:48px;height:48px;border-radius:8px;background:var(--bg-2);background-size:cover;background-position:center;flex:none;display:grid;place-items:center;color:var(--faint);font-size:18px;overflow:hidden}
+.om-now-meta{min-width:0}
+.om-now-meta b{font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.om-now-meta span{font-size:11.5px;color:var(--faint)}
+.om-controls{display:flex;align-items:center;justify-content:center;gap:18px}
+.om-pbtn{font-size:16px;color:var(--dim);transition:color .18s}
+.om-pbtn:hover{color:var(--text)}
+.om-play{width:42px;height:42px;border-radius:50%;background:var(--text);color:var(--bg-0);font-size:15px;display:grid;place-items:center}
+.om-seek{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.om-seek .om-slider{flex:1}
+
+/* Narrow / mobile: stack the console above the workspace (both scroll with the page) instead of an
+   off-canvas drawer — desktop is the primary surface (AgentDeck iframe), so keep mobile simple + usable. */
+@media (max-width:900px){
+  body{overflow:auto}
+  .om-app{display:block;height:auto;min-height:100%}
+  .om-left{height:auto;border-right:0;border-bottom:.5px solid var(--line)}
+  .om-wiz{height:auto;min-height:62vh}
+  .om-wiz-body{overflow:visible}
+  .om-text.om-grow{min-height:200px}
+  .om-main{height:auto}
+  .om-player{grid-template-columns:auto 1fr auto;gap:12px}
+  .om-seek{display:none}
+}
+
+/* ---- player idle state (no track loaded) ---- */
+.om-player.idle .om-controls,.om-player.idle .om-seek{opacity:.45}
+.om-player.idle .om-pbtn,.om-player.idle .om-play{cursor:default}
+
+/* ---- LYRICS modal ---- */
+.om-modal{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px;
+  background:oklch(8% 0.01 285 / .62);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.om-modal[hidden]{display:none}
+.om-modal-card{width:min(560px,92vw);max-height:80vh;overflow:auto;position:relative;
+  background:var(--bg-1);border:.5px solid var(--line-2);border-radius:18px;padding:26px 28px;
+  box-shadow:0 24px 70px oklch(0% 0 0 / .5)}
+.om-modal-x{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;
+  color:var(--dim);background:var(--bg-2);display:grid;place-items:center;font-size:13px}
+.om-modal-x:hover{color:#fff;background:oklch(58% 0.2 25)}
+.om-modal-title{font-size:19px;font-weight:600;margin-right:36px;overflow-wrap:anywhere}
+.om-modal-sub{font-size:12.5px;color:var(--faint);margin-top:6px;line-height:1.5}
+.om-lyrics-body{margin-top:18px;font:inherit;font-size:14px;line-height:1.75;color:var(--text);
+  white-space:pre-wrap;word-break:break-word}
