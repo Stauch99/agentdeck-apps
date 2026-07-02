@@ -1,0 +1,7 @@
+# 构建产物 / 上游 clone 缓存
+**/upstream/
+**/.next/
+**/node_modules/
+*.tar
+*.log
+.DS_Store
