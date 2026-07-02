@@ -1,0 +1,51 @@
+name: build-apps
+on:
+  push:
+    branches: [main]
+    paths: ['apps/**']
+  workflow_dispatch:
+jobs:
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.set.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - id: set
+        run: |
+          before="${{ github.event.before }}"
+          if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            # 首推 / workflow_dispatch: 无 before 基线 → 全量构建 (除 _template)
+            changed=$(ls -d apps/*/ 2>/dev/null | awk -F/ '{print $2}' | grep -vx '_template' || true)
+          else
+            changed=$(git diff --name-only "$before" HEAD -- 'apps/*/**' \
+              | awk -F/ '$1=="apps" && $2!="_template"{print $2}' | sort -u)
+          fi
+          echo "apps=$(printf '%s\n' $changed | jq -R . | jq -cs 'map(select(length>0))')" >> "$GITHUB_OUTPUT"
+  build:
+    needs: changed
+    if: needs.changed.outputs.apps != '[]' && needs.changed.outputs.apps != ''
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    strategy:
+      matrix:
+        app: ${{ fromJSON(needs.changed.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: jq 结构快检
+        run: |
+          jq -e --arg s "${{ matrix.app }}" \
+            '.slug==$s and (.name|length>0) and (.image|length>0) and (.port|numbers)' \
+            "apps/${{ matrix.app }}/cartridge.json"
+      - uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: build & push
+        run: |
+          slug="${{ matrix.app }}"; sha="${GITHUB_SHA::12}"
+          img="ghcr.io/${{ github.repository_owner }}/${slug}"
+          podman build -t "$img:$sha" -t "$img:latest" "apps/$slug"
+          podman push "$img:$sha"; podman push "$img:latest"
