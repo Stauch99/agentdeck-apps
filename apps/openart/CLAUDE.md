@@ -1,5 +1,5 @@
-# openart/
-> L2 | Parent: ../CLAUDE.md · 关联规格 ../docs/agentdeck/CARTRIDGE-CONTRACT.md · 设计稿 ../docs/superpowers/specs/2026-06-30-openart-cartridge-design.md
+# apps/openart/
+> L2 | Parent: ../../CLAUDE.md · manifest 字段对账平台 BoxAssistant/server/storage.go · 契约 BoxAssistant/docs/agentdeck/CARTRIDGE-CONTRACT.md
 
 muapi.ai 设计 agent(海报/品牌/视频),AgentDeck 卡带。**合体单镜像 = Next.js 16 web(:3000)+ FastAPI 透传代理(uvicorn :8000)**。上游源码不 vendor,构建期按 commit SHA 钉死拉取。
 

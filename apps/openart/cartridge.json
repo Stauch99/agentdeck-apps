@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "name": "OpenArt",
+  "slug": "openart",
+  "image": "ghcr.io/GHCR_ORG/openart:latest",
+  "port": 3000,
+  "glyph": "openart",
+  "color": "oklch(62% 0.20 277)",
+  "env": { "MU_API_KEY": "${MU_API_KEY}", "API_SUFFIX": "https://api.muapi.ai" },
+  "persistent": true,
+  "secrets": ["MU_API_KEY"],
+  "llm": { "gateway": false, "upstream": "muapi", "billing": "credits" }
+}
