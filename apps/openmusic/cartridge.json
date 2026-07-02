@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "name": "OpenMusic",
   "slug": "openmusic",
-  "image": "ghcr.io/Stauch99/openmusic:latest",
+  "image": "ghcr.io/stauch99/openmusic:latest",
   "port": 8080,
   "glyph": "openmusic",
   "color": "oklch(70% 0.18 25)",
