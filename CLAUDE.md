@@ -8,9 +8,15 @@
 
 <directory>
 apps/ — 每 App 一子目录(openmusic 自包含型 · openart 魔改开源型 · _template 起手样板)
-scripts/ — 共享工具(build.sh/ship.sh + lib 纯函数 + test/ 断言)
-.github/workflows/ — CI:路径过滤只构建改动 App,推 ghcr
+scripts/ — 共享工具(build.sh/ship.sh/index.sh 货架聚合 + lib 纯函数 + test/ 断言)
+.github/workflows/ — CI:路径过滤只构建改动 App 推 ghcr;index job 聚合货架发布
 </directory>
+
+<store>
+本仓同时是 AgentDeck 应用商店的数据源(store = git repo of manifests):
+scripts/index.sh 把全部 apps/*/cartridge.json 聚合成一份 index.json(内嵌完整 manifest;meta.icon 相对路径内联为 data URI;_template 排除),CI index job 发布;平台一次 GET 拿整货架,不 clone 本仓(安装单元 = manifest + ghcr 镜像引用,非目录)。
+manifest 的可选 meta 块(tagline/description/category/version/developer/website/icon/gallery/releaseNotes)是商店展示规格 —— 平台编排器无视,仅商店 UI 消费;category 限平台枚举(创作/设计/办公/开发/工具/娱乐/系统),icon 终态限 data:image/* 或 https。
+</store>
 
 <archetype>
 自包含型:源码 + web/ + 测试在目录内,Dockerfile 从本地源构建(样板 openmusic)
