@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 2,
+  "name": "Hermes",
+  "slug": "hermes",
+  "image": "agentdeck/hermes-webui:latest",
+  "port": 8787,
+  "glyph": "hermes",
+  "color": "oklch(74% 0.15 85)",
+  "env": {
+    "HERMES_WEBUI_HOST": "0.0.0.0",
+    "HERMES_WEBUI_PORT": "8787",
+    "HERMES_WEBUI_STATE_DIR": "/home/hermeswebui/.hermes/webui",
+    "WANTED_UID": "1000",
+    "WANTED_GID": "1000",
+    "UV_NO_CACHE": "1",
+    "PIP_NO_CACHE_DIR": "1",
+    "GATEWAY_HEALTH_URL": "http://host.docker.internal:8642"
+  },
+  "volumes": [{ "name": "home", "path": "/home/hermeswebui/.hermes", "layer": "state", "uid": 1000, "gid": 1000 }],
+  "persistent": true,
+  "llm": { "gateway": false, "upstream": "ark", "billing": "token" },
+  "notify": { "mode": "poll", "endpoint": "/api/sessions", "field": "last_message_at" },
+  "artifacts": { "volume": "home", "dir": "workspace" },
+  "sidecars": [{
+    "suffix": "gateway",
+    "image": "nousresearch/hermes-agent:latest",
+    "cmd": ["gateway", "run"],
+    "port": 8642,
+    "hostPort": 8642,
+    "env": {
+      "HERMES_HOME": "/opt/data",
+      "HERMES_UID": "1000",
+      "HERMES_GID": "1000",
+      "API_SERVER_ENABLED": "true",
+      "API_SERVER_HOST": "0.0.0.0",
+      "API_SERVER_PORT": "8642",
+      "API_SERVER_KEY": "${HERMES_API_SERVER_KEY}",
+      "OPENAI_API_KEY": "${ARK_API_KEY}"
+    },
+    "volumes": [{ "name": "home", "path": "/opt/data", "layer": "state", "uid": 1000, "gid": 1000 }],
+    "sharedRW": true
+  }],
+  "secrets": ["HERMES_API_SERVER_KEY", "ARK_API_KEY"],
+  "meta": {
+    "tagline": "会成长的 AI 助手,越用越懂你",
+    "description": "Nous Research 的 Hermes agent:浏览网页、改文件、跑命令、连 Telegram/微信,自己存技能与记忆,越用越顺手。",
+    "category": "系统",
+    "version": "1.0.0",
+    "developer": "Nous Research",
+    "icon": "icon.svg"
+  }
+}

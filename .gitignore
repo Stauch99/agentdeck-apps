@@ -5,3 +5,4 @@
 *.tar
 *.log
 .DS_Store
+store/

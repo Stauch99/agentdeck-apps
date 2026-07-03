@@ -15,6 +15,7 @@
     "description": "muapi.ai 驱动的设计 agent:对话生成海报、品牌视觉与短视频,产物进文件库。",
     "category": "设计",
     "version": "1.0.0",
-    "developer": "AgentDeck 官方"
+    "developer": "AgentDeck 官方",
+    "icon": "icon.svg"
   }
 }

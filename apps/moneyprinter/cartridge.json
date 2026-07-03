@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "name": "AI 短视频",
+  "slug": "moneyprinter",
+  "image": "ghcr.io/harry0703/moneyprinterturbo:latest",
+  "port": 8501,
+  "glyph": "moneyprinter",
+  "color": "oklch(68% 0.17 145)",
+  "cmd": ["bash", "-c", "ln -sf /MoneyPrinterTurbo/storage/config.toml /MoneyPrinterTurbo/config.toml && exec bash webui.sh"],
+  "env": { "MPT_WEBUI_HOST": "0.0.0.0", "MPT_WEBUI_PORT": "8501" },
+  "volumes": [{ "name": "storage", "path": "/MoneyPrinterTurbo/storage", "layer": "state", "uid": 0, "gid": 0 }],
+  "persistent": true,
+  "llm": { "gateway": true, "upstream": "ark", "billing": "token" },
+  "artifacts": { "volume": "storage", "dir": "tasks", "endpoint": "", "exts": ["mp4"] },
+  "resources": { "memoryMB": 3072, "cpus": 3 },
+  "meta": {
+    "tagline": "带货短视频,脚本配音一键量产",
+    "description": "输入主题,自动生成口播文案、配音、字幕、成片。MoneyPrinterTurbo 驱动。",
+    "category": "娱乐",
+    "version": "1.0.0",
+    "developer": "社区精选",
+    "icon": "icon.svg"
+  }
+}
