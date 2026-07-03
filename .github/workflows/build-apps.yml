@@ -46,7 +46,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: build & push
         run: |
-          slug="${{ matrix.app }}"; sha="${GITHUB_SHA::12}"
+          slug="${{ matrix.app }}"
+          # manifest-only App (无 Dockerfile): 引用现成上游镜像 (内部 builtin / 第三方),
+          # 不 CI 构建, 仅由 index job 聚合其 cartridge.json 上架货架 (Umbrel 式精选目录)。
+          if [ ! -f "apps/$slug/Dockerfile" ]; then
+            echo "manifest-only (无 Dockerfile): $slug — 跳过构建, 镜像引用现成上游"
+            exit 0
+          fi
+          sha="${GITHUB_SHA::12}"
           owner="${GITHUB_REPOSITORY_OWNER,,}"   # ghcr 镜像名必须小写
           img="ghcr.io/${owner}/${slug}"
           podman build -t "$img:$sha" -t "$img:latest" "apps/$slug"
