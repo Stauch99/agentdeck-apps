@@ -18,8 +18,12 @@ for dir in "$root"/apps/*/; do
   if [ -n "$icon_rel" ] && [ -f "$dir/$icon_rel" ]; then
     mime="image/svg+xml"
     case "$icon_rel" in *.png) mime="image/png";; *.jpg|*.jpeg) mime="image/jpeg";; esac
-    data="data:$mime;base64,$(base64 < "$dir/$icon_rel" | tr -d '\n')"
-    entry="$(jq --arg d "$data" '.meta.icon=$d' "$dir/cartridge.json")"
+    # data URI 经临时文件传给 jq (--rawfile), 不走命令行参数 —— png base64 可达 ~100KB,
+    # 超 Linux 单参数上限 MAX_ARG_STRLEN=128KB → --arg 会 "Argument list too long" (Mac 上限大不复现)。
+    dfile="$(mktemp)"
+    printf 'data:%s;base64,%s' "$mime" "$(base64 < "$dir/$icon_rel" | tr -d '\n')" > "$dfile"
+    entry="$(jq --rawfile d "$dfile" '.meta.icon=$d' "$dir/cartridge.json")"
+    rm -f "$dfile"
   fi
   apps="$(jq --argjson e "$entry" '. += [$e]' <<<"$apps")"
 done
