@@ -6,16 +6,28 @@
   "port": 3000,
   "glyph": "openart",
   "color": "oklch(62% 0.20 277)",
-  "env": { "MU_API_KEY": "${MU_API_KEY}", "API_SUFFIX": "https://api.muapi.ai" },
+  "env": {
+    "MU_API_KEY": "${MU_API_KEY}",
+    "API_SUFFIX": "https://api.muapi.ai"
+  },
   "persistent": true,
-  "secrets": ["MU_API_KEY"],
-  "llm": { "gateway": false, "upstream": "muapi", "billing": "credits" },
+  "secrets": [
+    "MU_API_KEY"
+  ],
+  "llm": {
+    "gateway": false,
+    "upstream": "muapi",
+    "billing": "credits"
+  },
   "meta": {
     "tagline": "海报 · 品牌 · 短片设计 agent",
     "description": "muapi.ai 驱动的设计 agent:对话生成海报、品牌视觉与短视频,产物进文件库。",
     "category": "设计",
     "version": "1.0.0",
     "developer": "AgentDeck 官方",
-    "icon": "icon.png"
+    "icon": "icon.png",
+    "gallery": [
+      "https://raw.githubusercontent.com/Stauch99/agentdeck-apps/main/apps/openart/banner.jpg"
+    ]
   }
 }

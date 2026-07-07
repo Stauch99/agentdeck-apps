@@ -14,16 +14,42 @@
     "NODE_ENV": "production",
     "NODE_OPTIONS": "--max-old-space-size=512"
   },
-  "volumes": [{ "name": "data", "path": "/app/.od", "layer": "state", "uid": 1001, "gid": 1001 }],
+  "volumes": [
+    {
+      "name": "data",
+      "path": "/app/.od",
+      "layer": "state",
+      "uid": 1001,
+      "gid": 1001
+    }
+  ],
   "persistent": true,
-  "llm": { "gateway": true, "upstream": "ark", "billing": "per-item" },
-  "artifacts": { "volume": "data", "dir": "projects", "exts": ["html", "pdf", "png", "jpg", "jpeg", "svg"] },
+  "llm": {
+    "gateway": true,
+    "upstream": "ark",
+    "billing": "per-item"
+  },
+  "artifacts": {
+    "volume": "data",
+    "dir": "projects",
+    "exts": [
+      "html",
+      "pdf",
+      "png",
+      "jpg",
+      "jpeg",
+      "svg"
+    ]
+  },
   "meta": {
     "tagline": "自托管的 Figma 式设计画布",
     "description": "像 Figma 一样做设计稿,agent 辅助生成与导出 HTML/图片,设计资产留在自己的机器上。",
     "category": "设计",
     "version": "1.0.0",
     "developer": "AgentDeck 官方",
-    "icon": "icon.png"
+    "icon": "icon.png",
+    "gallery": [
+      "https://raw.githubusercontent.com/Stauch99/agentdeck-apps/main/apps/opendesign/banner.jpg"
+    ]
   }
 }
