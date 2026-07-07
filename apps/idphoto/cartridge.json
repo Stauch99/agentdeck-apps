@@ -6,15 +6,29 @@
   "port": 7860,
   "glyph": "idphoto",
   "color": "oklch(72% 0.14 220)",
-  "cmd": ["python3", "-u", "app.py", "--host", "0.0.0.0", "--port", "7860"],
+  "cmd": [
+    "python3",
+    "-u",
+    "app.py",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "7860"
+  ],
   "persistent": true,
-  "resources": { "memoryMB": 2048, "cpus": 2 },
+  "resources": {
+    "memoryMB": 2048,
+    "cpus": 2
+  },
   "meta": {
     "tagline": "证件照换底 + 排版,在家搞定",
     "description": "上传自拍,自动裁切换底色,一寸两寸随选,排版好直接打印。HivisionIDPhotos 驱动。",
     "category": "工具",
     "version": "1.3.1",
     "developer": "社区精选",
-    "icon": "icon.png"
+    "icon": "icon.png",
+    "gallery": [
+      "https://raw.githubusercontent.com/Stauch99/agentdeck-apps/main/apps/idphoto/banner.jpg"
+    ]
   }
 }

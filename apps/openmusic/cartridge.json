@@ -6,19 +6,51 @@
   "port": 8080,
   "glyph": "openmusic",
   "color": "oklch(70% 0.18 25)",
-  "env": { "KIE_API_KEY": "${KIE_API_KEY}", "OPENMUSIC_DATA_DIR": "/data" },
-  "volumes": [ { "name": "home", "path": "/data", "layer": "state" } ],
+  "env": {
+    "KIE_API_KEY": "${KIE_API_KEY}",
+    "OPENMUSIC_DATA_DIR": "/data"
+  },
+  "volumes": [
+    {
+      "name": "home",
+      "path": "/data",
+      "layer": "state"
+    }
+  ],
   "persistent": true,
-  "secrets": ["KIE_API_KEY"],
-  "llm": { "gateway": false, "upstream": "kie", "billing": "credits" },
-  "notify": { "mode": "poll", "endpoint": "/api/songs", "field": "status" },
-  "artifacts": { "volume": "home", "dir": "media", "endpoint": "/api/artifacts", "exts": ["mp3", "jpg", "jpeg", "png"] },
+  "secrets": [
+    "KIE_API_KEY"
+  ],
+  "llm": {
+    "gateway": false,
+    "upstream": "kie",
+    "billing": "credits"
+  },
+  "notify": {
+    "mode": "poll",
+    "endpoint": "/api/songs",
+    "field": "status"
+  },
+  "artifacts": {
+    "volume": "home",
+    "dir": "media",
+    "endpoint": "/api/artifacts",
+    "exts": [
+      "mp3",
+      "jpg",
+      "jpeg",
+      "png"
+    ]
+  },
   "meta": {
     "tagline": "一句话生成整首歌 + 封面",
     "description": "Suno 风 AI 音乐生成:输入描述,产出成品 mp3 与封面图,自动进文件库,可经微信直达。",
     "category": "创作",
     "version": "1.0.0",
     "developer": "AgentDeck 官方",
-    "icon": "icon.png"
+    "icon": "icon.png",
+    "gallery": [
+      "https://raw.githubusercontent.com/Stauch99/agentdeck-apps/main/apps/openmusic/banner.jpg"
+    ]
   }
 }

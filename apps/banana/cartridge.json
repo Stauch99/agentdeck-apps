@@ -6,36 +6,65 @@
   "port": 80,
   "glyph": "banana",
   "color": "oklch(80% 0.16 95)",
-  "cmd": ["sh", "-c", "grep -rl 'backend:5000' /etc/nginx | xargs sed -i 's/backend:5000/host.docker.internal:5011/g' && exec nginx -g 'daemon off;'"],
+  "cmd": [
+    "sh",
+    "-c",
+    "grep -rl 'backend:5000' /etc/nginx | xargs sed -i 's/backend:5000/host.docker.internal:5011/g' && exec nginx -g 'daemon off;'"
+  ],
   "persistent": true,
-  "sidecars": [{
-    "suffix": "api",
-    "image": "anoinex/banana-slides-backend:latest",
-    "port": 5000,
-    "hostPort": 5011,
-    "env": {
-      "AI_PROVIDER_FORMAT": "lazyllm",
-      "DOUBAO_API_KEY": "${ARK_API_KEY}",
-      "FLASK_ENV": "production",
-      "IMAGE_MODEL_SOURCE": "doubao",
-      "LOG_LEVEL": "INFO",
-      "OUTPUT_LANGUAGE": "zh",
-      "TEXT_MODEL_SOURCE": "doubao"
-    },
-    "volumes": [
-      { "name": "instance", "path": "/app/backend/instance", "layer": "state", "uid": 0, "gid": 0 },
-      { "name": "uploads", "path": "/app/uploads", "layer": "state", "uid": 0, "gid": 0 }
-    ],
-    "resources": { "memoryMB": 2048, "cpus": 2 }
-  }],
-  "resources": { "memoryMB": 512, "cpus": 1 },
-  "secrets": ["ARK_API_KEY"],
+  "sidecars": [
+    {
+      "suffix": "api",
+      "image": "anoinex/banana-slides-backend:latest",
+      "port": 5000,
+      "hostPort": 5011,
+      "env": {
+        "AI_PROVIDER_FORMAT": "lazyllm",
+        "DOUBAO_API_KEY": "${ARK_API_KEY}",
+        "FLASK_ENV": "production",
+        "IMAGE_MODEL_SOURCE": "doubao",
+        "LOG_LEVEL": "INFO",
+        "OUTPUT_LANGUAGE": "zh",
+        "TEXT_MODEL_SOURCE": "doubao"
+      },
+      "volumes": [
+        {
+          "name": "instance",
+          "path": "/app/backend/instance",
+          "layer": "state",
+          "uid": 0,
+          "gid": 0
+        },
+        {
+          "name": "uploads",
+          "path": "/app/uploads",
+          "layer": "state",
+          "uid": 0,
+          "gid": 0
+        }
+      ],
+      "resources": {
+        "memoryMB": 2048,
+        "cpus": 2
+      }
+    }
+  ],
+  "resources": {
+    "memoryMB": 512,
+    "cpus": 1
+  },
+  "secrets": [
+    "ARK_API_KEY"
+  ],
   "meta": {
     "tagline": "一句话生成整套 PPT",
     "description": "AI 幻灯片生成:给个主题,自动产出成套演示文稿,火山豆包驱动,中文优先。",
     "category": "办公",
     "version": "1.0.0",
     "developer": "社区精选",
-    "icon": "icon.png"
+    "icon": "icon.png",
+    "gallery": [
+      "https://raw.githubusercontent.com/Stauch99/agentdeck-apps/main/apps/banana/banner.jpg"
+    ]
   }
 }
